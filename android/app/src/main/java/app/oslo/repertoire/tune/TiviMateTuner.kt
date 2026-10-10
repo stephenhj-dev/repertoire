@@ -27,8 +27,18 @@ class TiviMateTuner(
         if (inSearch(items)) return items
         repeat(7) {
             if (onMainMenu(items)) {
-                items = openSearch(items)
-                if (inSearch(items)) return items
+                // Leaving playback, the main menu is still animating in, so the
+                // first tap on Search is often dropped. Let it settle, then
+                // retry the tap a few times before giving up.
+                pause(400)
+                items = dumpNodes()
+                repeat(3) {
+                    if (onMainMenu(items)) items = openSearch(items)
+                    if (inSearch(items)) return items
+                    pause(500)
+                    items = dumpNodes()
+                    if (inSearch(items)) return items
+                }
                 return items
             }
             key("KEYCODE_BACK")
@@ -49,8 +59,14 @@ class TiviMateTuner(
         val search = items.firstOrNull { it.text == "Search" && it.left < scaled(500, scale) } ?: return items
         val pad = scaled(16, scale)
         tap(scaled(32, scale), (search.top - pad).coerceAtLeast(0), scaled(408, scale), search.bottom + pad)
-        pause(800)
-        return dumpNodes()
+        // Poll instead of one fixed wait: search can take a moment to open.
+        var now = items
+        repeat(5) {
+            pause(400)
+            now = dumpNodes()
+            if (inSearch(now)) return now
+        }
+        return now
     }
 
     private fun focusField(items: List<UiNode>) {
