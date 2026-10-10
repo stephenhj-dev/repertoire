@@ -6,14 +6,15 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.oslo.tivimate.guide.ui.GuideApp
-import app.oslo.tivimate.guide.ui.GuideTheme
+import app.oslo.tivimate.guide.ui.theme.GuideTheme
+import app.oslo.tivimate.guide.ui.theme.ThemeMode
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            GuideTheme {
+            GuideTheme(mode = ThemeMode.Dark, dynamicColor = false) {
                 val model: GuideViewModel = viewModel()
                 GuideApp(model)
             }

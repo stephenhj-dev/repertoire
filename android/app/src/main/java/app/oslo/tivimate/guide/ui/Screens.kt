@@ -1,5 +1,7 @@
 package app.oslo.tivimate.guide.ui
 
+import androidx.compose.ui.graphics.Color
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -81,6 +83,16 @@ import app.oslo.tivimate.guide.remote.Keys
 import app.oslo.tivimate.guide.remote.NavTransport
 import app.oslo.tivimate.guide.remote.Support
 import kotlinx.coroutines.delay
+
+// Legacy palette, kept until this file is replaced by the new screens.
+private val Ink = Color(0xFF07090E)
+private val Paper = Color(0xFF10141C)
+private val Card = Color(0xFF171D28)
+private val Line = Color(0xFF2C3648)
+private val Amber = Color(0xFFF5C518)
+private val Foam = Color(0xFFE7EDF6)
+private val Mist = Color(0xFF8E9AAD)
+private val Good = Color(0xFF3DDC97)
 
 @Composable
 fun GuideApp(model: GuideViewModel) {
