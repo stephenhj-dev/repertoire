@@ -35,10 +35,14 @@ class PortalStore(context: Context) {
 
 // The preference file keeps its original "shield" name so existing installs keep their host and pairing.
 class TvStore(context: Context) {
+    private companion object {
+        const val LEGACY_DEFAULT_HOST = "192.168.1.50"
+    }
+
     private val preferences = context.getSharedPreferences("shield", Context.MODE_PRIVATE)
 
     var host: String
-        get() = preferences.getString("host", "192.168.1.50") ?: "192.168.1.50"
+        get() = preferences.getString("host", null) ?: ""
         set(value) { preferences.edit().putString("host", value.trim()).apply() }
 
     /** Legacy flag: true once any TV was paired. Kept so older builds still see the pairing. */
@@ -47,7 +51,12 @@ class TvStore(context: Context) {
         set(value) { preferences.edit().putBoolean("paired", value).apply() }
 
     init {
-        // Builds before multi-device support paired exactly one TV, the saved host.
+        // Builds before multi-device support defaulted the host to the original Shield's address
+        // without saving it. Keep that address for installs that paired against it.
+        if (!preferences.contains("host") && paired) {
+            preferences.edit().putString("host", LEGACY_DEFAULT_HOST).apply()
+        }
+        // They also paired exactly one TV, the saved host.
         if (!preferences.contains("pairedHosts") && paired && host.isNotBlank()) {
             preferences.edit().putStringSet("pairedHosts", setOf(host)).apply()
         }

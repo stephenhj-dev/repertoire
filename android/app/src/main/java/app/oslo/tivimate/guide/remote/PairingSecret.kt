@@ -12,7 +12,7 @@ fun pairingSecret(
 ): ByteArray {
     val code = pin.trim().uppercase()
     require(code.length == 6 && code.all { it in '0'..'9' || it in 'A'..'F' }) {
-        "The Shield code is 6 hex characters"
+        "The TV code is 6 hex characters"
     }
     val digest = MessageDigest.getInstance("SHA-256").apply {
         update(hexBytes(clientModulus.toString(16).uppercase()))
@@ -23,7 +23,7 @@ fun pairingSecret(
     }.digest()
     val expected = code.substring(0, 2).toInt(16)
     if ((digest[0].toInt() and 0xFF) != expected) {
-        throw IllegalArgumentException("That code does not match this Shield")
+        throw IllegalArgumentException("That code does not match this TV")
     }
     return digest
 }

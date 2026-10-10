@@ -34,7 +34,7 @@ data class TvStatus(
     val volumeMax: Int? = null,
     val muted: Boolean = false,
     val currentApp: String = "",
-    val detail: String = "Shield offline",
+    val detail: String = "TV offline",
 )
 
 class TvRemote(context: Context) {
@@ -131,7 +131,7 @@ class TvRemote(context: Context) {
     fun cancelPairing() {
         pairing?.close()
         pairing = null
-        _status.value = _status.value.copy(waitingForCode = false, detail = "Shield offline")
+        _status.value = _status.value.copy(waitingForCode = false, detail = "TV offline")
     }
 
     suspend fun key(code: Int, direction: Int = Keys.SHORT) {
@@ -153,13 +153,13 @@ class TvRemote(context: Context) {
     }
 
     private suspend fun deliver(block: (CommandSession) -> Unit) {
-        val target = savedHost.ifBlank { error("Shield is not connected") }
+        val target = savedHost.ifBlank { error("The TV is not connected") }
         var last: Exception? = null
         repeat(2) { attempt ->
             try {
                 val current = command
                 if (current == null || !current.alive) connect(target)
-                val session = command ?: error("Shield is not connected")
+                val session = command ?: error("The TV is not connected")
                 onSender { block(session) }
                 return
             } catch (error: Exception) {
@@ -169,7 +169,7 @@ class TvRemote(context: Context) {
                 if (attempt == 1 || !closedSocket(error)) throw error
             }
         }
-        throw last ?: IllegalStateException("Shield is not connected")
+        throw last ?: IllegalStateException("The TV is not connected")
     }
 
     private fun closedSocket(error: Throwable): Boolean {
@@ -247,7 +247,7 @@ private class CommandSession(
     }
 
     private fun send(message: ByteArray) {
-        val stream = output ?: error("Shield is not connected")
+        val stream = output ?: error("The TV is not connected")
         val framed = frame(message)
         synchronized(stream) {
             stream.write(framed)
@@ -267,7 +267,7 @@ private class CommandSession(
         } catch (error: Exception) {
             if (!ready.isCompleted) ready.completeExceptionally(error)
             if (!closedByUs) {
-                onStatus(TvStatus(connected = false, detail = error.message ?: "Shield disconnected"))
+                onStatus(TvStatus(connected = false, detail = error.message ?: "TV disconnected"))
             }
         } finally {
             alive = false
@@ -310,7 +310,7 @@ private class CommandSession(
             }
             message.has(40) -> {
                 val started = message.msg(40)?.bool(1) ?: true
-                onStatus(TvStatus(connected = true, detail = if (started) "Connected" else "Shield is asleep"))
+                onStatus(TvStatus(connected = true, detail = if (started) "Connected" else "The TV is asleep"))
                 if (!ready.isCompleted) ready.complete(Unit)
             }
             message.has(50) -> {
@@ -351,7 +351,7 @@ private class PairingSession(
     }
 
     suspend fun submit(pin: String) {
-        val server = serverCert ?: error("The Shield did not present a certificate")
+        val server = serverCert ?: error("The TV did not present a certificate")
         val clientKey = identity.certificate.publicKey as RSAPublicKey
         val serverKey = server.publicKey as RSAPublicKey
         val secret = pairingSecret(
@@ -394,7 +394,7 @@ private class PairingSession(
     private fun handle(message: ProtoFields) {
         val status = message.int(2) ?: 200
         if (status != 200) {
-            fail(IllegalStateException(if (status == 402) "The Shield rejected that code" else "Pairing failed ($status)"))
+            fail(IllegalStateException(if (status == 402) "The TV rejected that code" else "Pairing failed ($status)"))
             return
         }
         val reply = when {

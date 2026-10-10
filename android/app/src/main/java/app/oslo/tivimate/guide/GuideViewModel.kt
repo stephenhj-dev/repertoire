@@ -346,9 +346,11 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
 
     fun saveHost() {
         if (host.isBlank()) return
-        tvStore.host = host
-        host = tvStore.host
-        remote.rememberHost(host)
+        if (host.trim() != tvStore.host) {
+            useAddress(host)
+            return
+        }
+        remote.rememberHost(tvStore.host)
     }
 
     fun pair() {

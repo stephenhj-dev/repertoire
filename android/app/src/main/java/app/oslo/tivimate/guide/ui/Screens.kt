@@ -84,7 +84,7 @@ import kotlinx.coroutines.delay
 
 @Composable
 fun GuideApp(model: GuideViewModel) {
-    val shield by model.remote.status.collectAsState()
+    val tv by model.remote.status.collectAsState()
     var menu by remember { mutableStateOf(false) }
     BackHandler(enabled = menu || model.page != Page.Home || model.drilled) {
         when {
@@ -105,15 +105,15 @@ fun GuideApp(model: GuideViewModel) {
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when (model.page) {
                     Page.Home -> HomeScreen()
-                    Page.Devices -> DevicesScreen(model, shield.waitingForCode, shield.detail, shield.connected)
+                    Page.Devices -> DevicesScreen(model, tv.waitingForCode, tv.detail, tv.connected)
                     Page.Guide -> GuideScreen(model)
                     Page.Remote -> RemoteScreen(
                         model,
-                        shield.connected,
-                        shield.detail,
-                        shield.volumeLevel,
-                        shield.volumeMax,
-                        shield.muted,
+                        tv.connected,
+                        tv.detail,
+                        tv.volumeLevel,
+                        tv.volumeMax,
+                        tv.muted,
                     )
                     Page.Settings -> SettingsScreen(model)
                 }
@@ -279,7 +279,7 @@ private fun HomeScreen() {
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            "Guide and remote for the Shield",
+            "Guide and remote for TiviMate on your TV",
             color = Mist,
             fontSize = 15.sp,
             modifier = Modifier.alpha(eased),
@@ -291,7 +291,11 @@ private fun HomeScreen() {
 private fun DevicesScreen(model: GuideViewModel, waiting: Boolean, detail: String, linked: Boolean) {
     LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
-            Text("Shields on this network", color = Mist, fontSize = 13.sp)
+            Text(
+                if (model.devices.isEmpty()) "No TV yet. Tap Find, or enter its address." else "TVs on this network",
+                color = Mist,
+                fontSize = 13.sp,
+            )
         }
         itemsIndexed(model.devices) { _, device ->
             val selected = device.host == model.selectedHost
@@ -330,7 +334,7 @@ private fun DevicesScreen(model: GuideViewModel, waiting: Boolean, detail: Strin
                 }
             }
         }
-        item { Field("Shield address", model.host) { model.host = it } }
+        item { Field("TV address", model.host) { model.host = it } }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 PrimaryButton("Use address") { model.useAddress(model.host) }
@@ -505,9 +509,9 @@ private fun SettingsScreen(model: GuideViewModel) {
         item {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Stay linked to the Shield", color = Foam)
+                    Text("Stay linked to the TV", color = Foam)
                     Text(
-                        if (model.paired) "Pairing is kept until you disconnect." else "Pair the Shield from Devices first.",
+                        if (model.paired) "Pairing is kept until you disconnect." else "Pair the TV from Devices first.",
                         color = Mist,
                         fontSize = 13.sp,
                     )
@@ -527,7 +531,7 @@ private fun SettingsScreen(model: GuideViewModel) {
         }
         item {
             Text(
-                "Video stays on the Shield. This phone is the guide and the remote.",
+                "Video stays on the TV. This phone is the guide and the remote.",
                 color = Mist,
                 fontSize = 13.sp,
             )
