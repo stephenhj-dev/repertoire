@@ -18,6 +18,16 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
+
+        // TMDB v4 read access token from tmdb.properties (gitignored). Empty when the file is
+        // missing; the app then hides everything that needs TMDB.
+        val tmdbProps = Properties().apply {
+            val f = rootProject.file("tmdb.properties")
+            if (f.exists()) f.inputStream().use { load(it) }
+        }
+        val tmdbToken = tmdbProps.getProperty("tmdb.readToken", "").trim()
+            .replace("\\", "\\\\").replace("\"", "\\\"")
+        buildConfigField("String", "TMDB_READ_TOKEN", "\"$tmdbToken\"")
     }
 
     // Shared signing key for debug and release builds, kept outside the repo.
@@ -59,6 +69,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {
