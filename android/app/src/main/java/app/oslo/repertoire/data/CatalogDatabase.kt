@@ -35,6 +35,20 @@ data class TitleRow(
     val section: String? = null,
     /** Channel logo (stream_icon) or series/movie cover URL from the portal. */
     val icon: String? = null,
+    /** TMDB id when the portal lists one (tmdb / tmdb_id), for movies and series. */
+    val tmdbId: Int? = null,
+    /** Release year from the portal (year / releaseDate), when given. */
+    val year: Int? = null,
+)
+
+/** The columns needed to match catalog movies and series against TMDB. */
+data class LibraryRow(
+    val id: Long,
+    val kind: String,
+    val name: String,
+    val icon: String?,
+    val tmdbId: Int?,
+    val year: Int?,
 )
 
 @Entity(tableName = "groups", primaryKeys = ["kind", "categoryId"])
@@ -65,6 +79,15 @@ interface CatalogDao {
 
     @Insert
     fun insertGroups(rows: List<GroupRow>)
+
+    @Query("SELECT * FROM titles WHERE id = :id")
+    suspend fun titleById(id: Long): TitleRow?
+
+    @Query("SELECT id, kind, name, icon, tmdbId, year FROM titles WHERE banner = 0 AND kind IN ('movie', 'show')")
+    suspend fun libraryRows(): List<LibraryRow>
+
+    @Query("UPDATE titles SET tmdbId = :tmdbId WHERE id = :id")
+    suspend fun setTmdbId(id: Long, tmdbId: Int)
 
     @Query("SELECT COUNT(*) FROM titles WHERE banner = 0")
     suspend fun titleCount(): Int
@@ -251,7 +274,7 @@ interface CatalogDao {
     ): List<TitleRow>
 }
 
-@Database(entities = [TitleRow::class, GroupRow::class], version = 3, exportSchema = false)
+@Database(entities = [TitleRow::class, GroupRow::class], version = 4, exportSchema = false)
 abstract class CatalogDatabase : RoomDatabase() {
     abstract fun catalog(): CatalogDao
 
@@ -268,6 +291,13 @@ abstract class CatalogDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE titles ADD COLUMN tmdbId INTEGER")
+                db.execSQL("ALTER TABLE titles ADD COLUMN year INTEGER")
+            }
+        }
+
         @Volatile private var instance: CatalogDatabase? = null
 
         fun get(context: Context): CatalogDatabase =
@@ -276,7 +306,7 @@ abstract class CatalogDatabase : RoomDatabase() {
                     context.applicationContext,
                     CatalogDatabase::class.java,
                     "guide.db",
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .fallbackToDestructiveMigration()
                     .build()
                     .also { instance = it }

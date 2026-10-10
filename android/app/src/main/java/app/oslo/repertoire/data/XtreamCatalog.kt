@@ -5,6 +5,7 @@ import android.os.Looper
 import android.util.JsonReader
 import android.util.JsonToken
 import androidx.room.withTransaction
+import app.oslo.repertoire.tmdb.TitleNormalizer
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
@@ -101,6 +102,33 @@ object PortalCheck {
     }
 }
 
+/** TMDB id and year for one movie or series, from get_vod_info / get_series_info. */
+data class XtreamTitleInfo(val tmdbId: Int?, val year: Int?)
+
+object XtreamInfo {
+    private val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; isLenient = true }
+
+    /** Asks the portal about one title. Blocking; null when the portal has nothing useful. */
+    fun lookup(portal: String, username: String, password: String, kind: String, remoteId: String): XtreamTitleInfo? {
+        val action = if (kind == "show") "get_series_info&series_id=" else "get_vod_info&vod_id="
+        val id = URLEncoder.encode(remoteId, Charsets.UTF_8.name())
+        val connection = PortalUrl.open(PortalUrl.action(portal, username, password, action + id))
+        val body = try {
+            connection.inputStream.bufferedReader().use { it.readText() }
+        } finally {
+            connection.disconnect()
+        }
+        val root = runCatching { json.parseToJsonElement(body) }.getOrNull() as? kotlinx.serialization.json.JsonObject ?: return null
+        val info = root["info"] as? kotlinx.serialization.json.JsonObject ?: return null
+        fun field(vararg names: String): String? = names.firstNotNullOfOrNull { name ->
+            (info[name] as? kotlinx.serialization.json.JsonPrimitive)?.content?.takeIf { it.isNotBlank() && it != "null" }
+        }
+        val tmdbId = field("tmdb_id", "tmdb")?.trim()?.toIntOrNull()?.takeIf { it > 0 }
+        val year = TitleNormalizer.yearOf(field("releasedate", "releaseDate", "release_date", "year"))
+        return if (tmdbId == null && year == null) null else XtreamTitleInfo(tmdbId, year)
+    }
+}
+
 class CatalogSync(private val database: CatalogDatabase) {
     suspend fun refresh(
         portal: String,
@@ -177,7 +205,9 @@ class CatalogSync(private val database: CatalogDatabase) {
             val id = item[idKey] ?: return@readArray
             if (name.isEmpty()) return@readArray
             val icon = (item["stream_icon"] ?: item["cover"])?.trim()?.takeIf { it.startsWith("http") }
-            incoming += Incoming(name, id, item["category_id"], icon)
+            val tmdbId = (item["tmdb"] ?: item["tmdb_id"])?.trim()?.toIntOrNull()?.takeIf { it > 0 }
+            val year = TitleNormalizer.yearOf(item["year"] ?: item["releaseDate"] ?: item["release_date"] ?: item["releasedate"])
+            incoming += Incoming(name, id, item["category_id"], icon, tmdbId, year)
             if (incoming.size % 5000 == 0) onProgress("$kind ${incoming.size}")
         }
         val classes = if (kind == "live") {
@@ -198,6 +228,8 @@ class CatalogSync(private val database: CatalogDatabase) {
                 sortOrder = index,
                 section = if (mark.banner) null else mark.section,
                 icon = row.icon,
+                tmdbId = row.tmdbId,
+                year = row.year,
             )
         }
     }
@@ -236,9 +268,19 @@ class CatalogSync(private val database: CatalogDatabase) {
         return values
     }
 
-    private data class Incoming(val name: String, val remoteId: String, val categoryId: String?, val icon: String?)
+    private data class Incoming(
+        val name: String,
+        val remoteId: String,
+        val categoryId: String?,
+        val icon: String?,
+        val tmdbId: Int? = null,
+        val year: Int? = null,
+    )
 
     private companion object {
-        val FIELDS = setOf("name", "stream_id", "series_id", "category_id", "category_name", "stream_icon", "cover")
+        val FIELDS = setOf(
+            "name", "stream_id", "series_id", "category_id", "category_name", "stream_icon", "cover",
+            "tmdb", "tmdb_id", "year", "releaseDate", "release_date", "releasedate",
+        )
     }
 }

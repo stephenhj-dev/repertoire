@@ -241,7 +241,9 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
                 meta.edit().putBoolean("sectionsBackfilled", true).apply()
             }
             // Catalogs synced before v3 have no logos; fetch them once.
-            if (saved != null && (database.catalog().titleCount() == 0 || !meta.getBoolean("iconsFetched", false))) refresh()
+            // ...and catalogs synced before v4 have no TMDB ids or years.
+            if (saved != null && (database.catalog().titleCount() == 0 || !meta.getBoolean("iconsFetched", false) ||
+                    !meta.getBoolean("tmdbFieldsFetched", false))) refresh()
             reload()
             loadCounts()
         }
@@ -504,7 +506,7 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
                     status = step
                     syncStep = friendlyStep(step)
                 }
-                meta.edit().putBoolean("iconsFetched", true).apply()
+                meta.edit().putBoolean("iconsFetched", true).putBoolean("tmdbFieldsFetched", true).apply()
                 reload()
                 loadCounts()
                 if (searchText.isNotBlank()) runSearch()
