@@ -275,14 +275,14 @@ private fun HomeScreen() {
             )
             Image(
                 painter = painterResource(R.drawable.brand_mark),
-                contentDescription = "TiviMate Assistant",
+                contentDescription = "Repertoire",
                 modifier = Modifier.size(196.dp).clip(RoundedCornerShape(36.dp)),
                 contentScale = ContentScale.Crop,
             )
         }
         Spacer(Modifier.height(28.dp))
         Text(
-            "TiviMate Assistant",
+            "Repertoire",
             color = Foam,
             fontSize = 34.sp,
             fontWeight = FontWeight.SemiBold,
@@ -291,7 +291,7 @@ private fun HomeScreen() {
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            "Guide and remote for TiviMate on your TV",
+            "Guide and remote for TiviMate",
             color = Mist,
             fontSize = 15.sp,
             modifier = Modifier.alpha(eased),

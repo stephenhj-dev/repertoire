@@ -1,6 +1,6 @@
-# TiviMate Assistant
+# Repertoire
 
-Phone guide and remote for TiviMate on any Android TV, Google TV or Fire TV device: NVIDIA Shield, Chromecast with Google TV, Google TV Streamer, Sony / TCL / Hisense Google TV sets, Onn boxes, Fire TV sticks and cubes. The app shows no video. Search, country listings, and the remote run on the phone. TiviMate on the TV plays the channel.
+Guide and remote for TiviMate. Repertoire is a phone guide and remote for TiviMate on any Android TV, Google TV or Fire TV device: NVIDIA Shield, Chromecast with Google TV, Google TV Streamer, Sony / TCL / Hisense Google TV sets, Onn boxes, Fire TV sticks and cubes. The app shows no video. Search, country listings, and the remote run on the phone. TiviMate on the TV plays the channel.
 
 ## Build
 
