@@ -2,8 +2,6 @@ package app.oslo.tivimate.guide.remote
 
 import android.content.Context
 import android.util.Log
-import android.net.nsd.NsdManager
-import android.net.nsd.NsdServiceInfo
 import java.io.InputStream
 import java.io.OutputStream
 import java.security.KeyStore
@@ -18,13 +16,11 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
-import kotlin.coroutines.resume
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -495,40 +491,3 @@ private fun tlsSocket(
     peer?.let(onPeer)
     return socket
 }
-
-suspend fun discoverTv(context: Context, timeoutMs: Long = 4000): String? {
-    val manager = context.getSystemService(NsdManager::class.java) ?: return null
-    return withContext(Dispatchers.Main) {
-        try {
-            withTimeout(timeoutMs) {
-                suspendCancellableCoroutine { cont ->
-                    lateinit var listener: NsdManager.DiscoveryListener
-                    listener = object : NsdManager.DiscoveryListener {
-                        override fun onStartDiscoveryFailed(serviceType: String?, errorCode: Int) {
-                            if (cont.isActive) cont.resume(null)
-                        }
-                        override fun onStopDiscoveryFailed(serviceType: String?, errorCode: Int) = Unit
-                        override fun onDiscoveryStarted(serviceType: String?) = Unit
-                        override fun onDiscoveryStopped(serviceType: String?) = Unit
-                        override fun onServiceLost(serviceInfo: NsdServiceInfo?) = Unit
-                        override fun onServiceFound(serviceInfo: NsdServiceInfo) {
-                            manager.resolveService(serviceInfo, object : NsdManager.ResolveListener {
-                                override fun onResolveFailed(info: NsdServiceInfo?, errorCode: Int) = Unit
-                                override fun onServiceResolved(info: NsdServiceInfo) {
-                                    val address = info.host?.hostAddress
-                                    if (cont.isActive) cont.resume(address)
-                                    runCatching { manager.stopServiceDiscovery(listener) }
-                                }
-                            })
-                        }
-                    }
-                    cont.invokeOnCancellation { runCatching { manager.stopServiceDiscovery(listener) } }
-                    manager.discoverServices("_androidtvremote2._tcp.", NsdManager.PROTOCOL_DNS_SD, listener)
-                }
-            }
-        } catch (_: Exception) {
-            null
-        }
-    }
-}
-
