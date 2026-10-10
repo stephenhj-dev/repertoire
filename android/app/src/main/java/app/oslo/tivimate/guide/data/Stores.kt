@@ -32,7 +32,8 @@ class PortalStore(context: Context) {
     }
 }
 
-class ShieldStore(context: Context) {
+// The preference file keeps its original "shield" name so existing installs keep their host and pairing.
+class TvStore(context: Context) {
     private val preferences = context.getSharedPreferences("shield", Context.MODE_PRIVATE)
 
     var host: String

@@ -8,7 +8,7 @@ import java.net.SocketTimeoutException
 
 data class AdbStatus(val ok: Boolean, val detail: String)
 
-object ShieldAdb {
+object TvAdb {
     fun probe(directory: File, host: String): AdbStatus {
         val address = host.substringBefore(":").trim()
         if (address.isBlank()) return AdbStatus(false, "Enter the Shield address.")
@@ -27,7 +27,7 @@ object ShieldAdb {
         report("Connecting to the Shield. Allow this phone if it asks.")
         return try {
             Dadb.create(address, 5555, keys(directory), 8_000, 45_000).use { dadb ->
-                TiviMateTuner(ShieldShell { command -> dadb.shell(command).allOutput }).play(name, report)
+                TiviMateTuner(TvShell { command -> dadb.shell(command).allOutput }).play(name, report)
             }
         } catch (error: Exception) {
             val text = error.message.orEmpty()

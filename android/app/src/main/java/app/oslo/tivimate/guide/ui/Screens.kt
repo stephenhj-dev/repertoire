@@ -325,7 +325,7 @@ private fun DevicesScreen(model: GuideViewModel, waiting: Boolean, detail: Strin
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 PrimaryButton("Use address") { model.selectDevice(model.host) }
-                PrimaryButton("Find", model::findShield)
+                PrimaryButton("Find", model::findTv)
             }
         }
         item { PrimaryButton(if (model.checkingAdb) "Checking" else "Check debugging", model::checkAdb) }
@@ -478,7 +478,7 @@ private fun SettingsScreen(model: GuideViewModel) {
                 }
                 Switch(
                     checked = model.linked,
-                    onCheckedChange = { on -> if (on) model.connect() else model.disconnectShield() },
+                    onCheckedChange = { on -> if (on) model.connect() else model.disconnectTv() },
                     enabled = model.paired,
                     colors = SwitchDefaults.colors(
                         checkedTrackColor = Amber,

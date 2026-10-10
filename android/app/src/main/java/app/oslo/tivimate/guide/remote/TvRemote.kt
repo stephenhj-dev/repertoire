@@ -30,7 +30,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
-data class ShieldStatus(
+data class TvStatus(
     val connected: Boolean = false,
     val waitingForCode: Boolean = false,
     val host: String = "",
@@ -41,11 +41,11 @@ data class ShieldStatus(
     val detail: String = "Shield offline",
 )
 
-class ShieldRemote(context: Context) {
+class TvRemote(context: Context) {
     private val directory = context.filesDir
     private val identity by lazy { ClientIdentityStore.loadOrCreate(directory) }
-    private val _status = MutableStateFlow(ShieldStatus())
-    val status: StateFlow<ShieldStatus> = _status
+    private val _status = MutableStateFlow(TvStatus())
+    val status: StateFlow<TvStatus> = _status
 
     private var command: CommandSession? = null
     private var pairing: PairingSession? = null
@@ -55,7 +55,7 @@ class ShieldRemote(context: Context) {
     private val connectGate = Mutex()
     var onSessionLost: ((Int) -> Unit)? = null
     private val sender = Executors.newSingleThreadExecutor { runnable ->
-        Thread(runnable, "shield-send").apply { isDaemon = true }
+        Thread(runnable, "tv-send").apply { isDaemon = true }
     }
 
     val currentApp: String get() = _status.value.currentApp
@@ -204,7 +204,7 @@ private class CommandSession(
     private val identity: ClientIdentity,
     private val host: String,
     private val generation: Int,
-    private val onStatus: (ShieldStatus) -> Unit,
+    private val onStatus: (TvStatus) -> Unit,
     private val onLost: (Int) -> Unit,
 ) {
     @Volatile var alive = true
@@ -218,7 +218,7 @@ private class CommandSession(
         val opened = tlsSocket(identity, host, 6466)
         socket = opened
         output = opened.outputStream
-        val thread = Thread({ readLoop(opened.inputStream) }, "shield-remote")
+        val thread = Thread({ readLoop(opened.inputStream) }, "tv-remote")
         thread.isDaemon = true
         thread.start()
         ready.await()
@@ -271,7 +271,7 @@ private class CommandSession(
         } catch (error: Exception) {
             if (!ready.isCompleted) ready.completeExceptionally(error)
             if (!closedByUs) {
-                onStatus(ShieldStatus(connected = false, detail = error.message ?: "Shield disconnected"))
+                onStatus(TvStatus(connected = false, detail = error.message ?: "Shield disconnected"))
             }
         } finally {
             alive = false
@@ -309,18 +309,18 @@ private class CommandSession(
                 val app = message.msg(20)?.msg(1)?.text(12).orEmpty()
                 if (app.isNotEmpty()) {
                     Log.i("TiviGuide", "foreground $app")
-                    onStatus(ShieldStatus(connected = true, currentApp = app, detail = "Connected"))
+                    onStatus(TvStatus(connected = true, currentApp = app, detail = "Connected"))
                 }
             }
             message.has(40) -> {
                 val started = message.msg(40)?.bool(1) ?: true
-                onStatus(ShieldStatus(connected = true, detail = if (started) "Connected" else "Shield is asleep"))
+                onStatus(TvStatus(connected = true, detail = if (started) "Connected" else "Shield is asleep"))
                 if (!ready.isCompleted) ready.complete(Unit)
             }
             message.has(50) -> {
                 val volume = message.msg(50)
                 onStatus(
-                    ShieldStatus(
+                    TvStatus(
                         connected = true,
                         volumeMax = volume?.int(6),
                         volumeLevel = volume?.int(7),
@@ -347,7 +347,7 @@ private class PairingSession(
         val opened = tlsSocket(identity, host, 6467) { serverCert = it }
         socket = opened
         output = opened.outputStream
-        val thread = Thread({ readLoop(opened.inputStream) }, "shield-pair")
+        val thread = Thread({ readLoop(opened.inputStream) }, "tv-pair")
         thread.isDaemon = true
         thread.start()
         send(pairingRequest())
@@ -496,7 +496,7 @@ private fun tlsSocket(
     return socket
 }
 
-suspend fun discoverShield(context: Context, timeoutMs: Long = 4000): String? {
+suspend fun discoverTv(context: Context, timeoutMs: Long = 4000): String? {
     val manager = context.getSystemService(NsdManager::class.java) ?: return null
     return withContext(Dispatchers.Main) {
         try {

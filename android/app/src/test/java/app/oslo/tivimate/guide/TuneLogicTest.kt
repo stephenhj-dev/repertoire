@@ -1,6 +1,6 @@
 package app.oslo.tivimate.guide
 
-import app.oslo.tivimate.guide.tune.ShieldShell
+import app.oslo.tivimate.guide.tune.TvShell
 import app.oslo.tivimate.guide.tune.TiviMateTuner
 import app.oslo.tivimate.guide.tune.encodedText
 import app.oslo.tivimate.guide.tune.score
@@ -27,26 +27,26 @@ class TuneLogicTest {
 
     @Test
     fun closesKeyboardBeforeSelectingTheMovie() {
-        val shield = FakeShield(keyboard = true)
-        val result = TiviMateTuner(shield) { }.play("4K-EN - The Matrix  1999")
+        val tv = FakeTv(keyboard = true)
+        val result = TiviMateTuner(tv) { }.play("4K-EN - The Matrix  1999")
         assertEquals("Playing 4K-EN - The Matrix  1999", result)
-        val back = shield.commands.indexOfFirst { "KEYCODE_BACK" in it }
-        val center = shield.commands.indexOfFirst { "KEYCODE_DPAD_CENTER" in it }
+        val back = tv.commands.indexOfFirst { "KEYCODE_BACK" in it }
+        val center = tv.commands.indexOfFirst { "KEYCODE_DPAD_CENTER" in it }
         assertTrue(back in 0 until center)
-        assertFalse(shield.commands.any { "1771" in it })
-        assertEquals(2, shield.commands.count { "KEYCODE_DPAD_CENTER" in it })
+        assertFalse(tv.commands.any { "1771" in it })
+        assertEquals(2, tv.commands.count { "KEYCODE_DPAD_CENTER" in it })
     }
 
     @Test
     fun leavesSearchAloneWhenTheKeyboardIsClosed() {
-        val shield = FakeShield(keyboard = false)
-        val result = TiviMateTuner(shield) { }.play("4K-EN - The Matrix  1999")
+        val tv = FakeTv(keyboard = false)
+        val result = TiviMateTuner(tv) { }.play("4K-EN - The Matrix  1999")
         assertEquals("Playing 4K-EN - The Matrix  1999", result)
-        assertFalse(shield.commands.any { "KEYCODE_BACK" in it })
+        assertFalse(tv.commands.any { "KEYCODE_BACK" in it })
     }
 }
 
-private class FakeShield(var keyboard: Boolean) : ShieldShell {
+private class FakeTv(var keyboard: Boolean) : TvShell {
     var screen = "search"
     var focused = "field"
     val commands = mutableListOf<String>()

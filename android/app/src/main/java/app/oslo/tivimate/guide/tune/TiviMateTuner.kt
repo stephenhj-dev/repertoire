@@ -1,11 +1,11 @@
 package app.oslo.tivimate.guide.tune
 
-fun interface ShieldShell {
+fun interface TvShell {
     fun exec(command: String): String
 }
 
 class TiviMateTuner(
-    private val shell: ShieldShell,
+    private val shell: TvShell,
     private val pause: (Long) -> Unit = { Thread.sleep(it) },
 ) {
     fun play(name: String, report: (String) -> Unit = {}): String {

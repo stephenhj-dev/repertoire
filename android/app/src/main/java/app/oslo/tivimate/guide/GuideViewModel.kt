@@ -10,13 +10,13 @@ import app.oslo.tivimate.guide.data.CatalogDatabase
 import app.oslo.tivimate.guide.data.CatalogSync
 import app.oslo.tivimate.guide.data.PortalLogin
 import app.oslo.tivimate.guide.data.PortalStore
-import app.oslo.tivimate.guide.data.ShieldStore
+import app.oslo.tivimate.guide.data.TvStore
 import app.oslo.tivimate.guide.data.countryLabel
 import app.oslo.tivimate.guide.data.likeNeedle
 import app.oslo.tivimate.guide.remote.Keys
-import app.oslo.tivimate.guide.remote.ShieldRemote
-import app.oslo.tivimate.guide.remote.discoverShield
-import app.oslo.tivimate.guide.tune.ShieldAdb
+import app.oslo.tivimate.guide.remote.TvRemote
+import app.oslo.tivimate.guide.remote.discoverTv
+import app.oslo.tivimate.guide.tune.TvAdb
 import android.os.Handler
 import android.os.Looper
 import kotlinx.coroutines.Dispatchers
@@ -50,13 +50,13 @@ private data class Drill(
 
 class GuideViewModel(app: Application) : AndroidViewModel(app) {
     private val portalStore = PortalStore(app)
-    private val shieldStore = ShieldStore(app)
+    private val tvStore = TvStore(app)
     private val database = CatalogDatabase.get(app)
     private val sync = CatalogSync(database)
-    val remote = ShieldRemote(app)
+    val remote = TvRemote(app)
 
     var page by mutableStateOf(Page.Home)
-    var devices by mutableStateOf(listOf(shieldStore.host))
+    var devices by mutableStateOf(listOf(tvStore.host))
     var adbOk by mutableStateOf<Boolean?>(null)
     var adbDetail by mutableStateOf("Not checked yet")
     var checkingAdb by mutableStateOf(false)
@@ -69,10 +69,10 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
     var portalUrl by mutableStateOf("")
     var username by mutableStateOf("")
     var password by mutableStateOf("")
-    var host by mutableStateOf(shieldStore.host)
+    var host by mutableStateOf(tvStore.host)
     var pin by mutableStateOf("")
-    var paired by mutableStateOf(shieldStore.paired)
-    var linked by mutableStateOf(shieldStore.paired && shieldStore.keepConnected)
+    var paired by mutableStateOf(tvStore.paired)
+    var linked by mutableStateOf(tvStore.paired && tvStore.keepConnected)
 
     var drilled by mutableStateOf(false)
     private var drill: Drill? = null
@@ -90,12 +90,12 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
             portalUrl = saved.url
             username = saved.username
         }
-        host = shieldStore.host
+        host = tvStore.host
         remote.rememberHost(host)
         remote.onSessionLost = { scheduleReconnect() }
         page = Page.Home
-        devices = listOf(shieldStore.host)
-        if (shieldStore.paired && shieldStore.keepConnected) connect()
+        devices = listOf(tvStore.host)
+        if (tvStore.paired && tvStore.keepConnected) connect()
         viewModelScope.launch {
             val meta = getApplication<Application>().getSharedPreferences("guide-meta", android.content.Context.MODE_PRIVATE)
             if (!meta.getBoolean("sectionsBackfilled", false)) {
@@ -116,7 +116,7 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
         val clean = address.trim()
         if (clean.isBlank()) return
         host = clean
-        shieldStore.host = clean
+        tvStore.host = clean
         remote.rememberHost(clean)
         if (clean !in devices) devices = devices + clean
         checkAdb()
@@ -128,7 +128,7 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
             checkingAdb = true
             adbDetail = "Checking debugging on $address"
             val result = withContext(Dispatchers.IO) {
-                app.oslo.tivimate.guide.tune.ShieldAdb.probe(getApplication<Application>().filesDir, address)
+                app.oslo.tivimate.guide.tune.TvAdb.probe(getApplication<Application>().filesDir, address)
             }
             adbOk = result.ok
             adbDetail = result.detail
@@ -232,10 +232,10 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun findShield() {
+    fun findTv() {
         viewModelScope.launch {
             status = "Looking for the Shield"
-            val found = discoverShield(getApplication())
+            val found = discoverTv(getApplication())
             if (found != null) {
                 selectDevice(found)
                 status = "Found $found"
@@ -247,8 +247,8 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
 
     fun saveHost() {
         if (host.isBlank()) return
-        shieldStore.host = host
-        host = shieldStore.host
+        tvStore.host = host
+        host = tvStore.host
         remote.rememberHost(host)
     }
 
@@ -256,7 +256,7 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
         saveHost()
         viewModelScope.launch {
             try {
-                remote.startPairing(shieldStore.host)
+                remote.startPairing(tvStore.host)
                 status = "Enter the code shown on the TV"
             } catch (error: Exception) {
                 status = error.message ?: "Could not start pairing"
@@ -269,8 +269,8 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 remote.finishPairing(pin)
                 pin = ""
-                shieldStore.paired = true
-                shieldStore.keepConnected = true
+                tvStore.paired = true
+                tvStore.keepConnected = true
                 paired = true
                 linked = true
                 status = "Paired"
@@ -282,12 +282,12 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun connect() {
-        shieldStore.keepConnected = true
-        linked = shieldStore.paired
+        tvStore.keepConnected = true
+        linked = tvStore.paired
         reconnectJob?.cancel()
         viewModelScope.launch {
             try {
-                remote.connect(shieldStore.host)
+                remote.connect(tvStore.host)
                 retryMs = 1_000L
             } catch (error: Exception) {
                 status = error.message ?: "Could not connect"
@@ -296,8 +296,8 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun disconnectShield() {
-        shieldStore.keepConnected = false
+    fun disconnectTv() {
+        tvStore.keepConnected = false
         linked = false
         reconnectJob?.cancel()
         remote.disconnect()
@@ -305,14 +305,14 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun scheduleReconnect() {
-        if (!shieldStore.keepConnected || !shieldStore.paired) return
+        if (!tvStore.keepConnected || !tvStore.paired) return
         if (reconnectJob?.isActive == true) return
         reconnectJob = viewModelScope.launch {
-            while (shieldStore.keepConnected && shieldStore.paired) {
+            while (tvStore.keepConnected && tvStore.paired) {
                 delay(retryMs)
-                if (!shieldStore.keepConnected) return@launch
+                if (!tvStore.keepConnected) return@launch
                 try {
-                    remote.connect(shieldStore.host)
+                    remote.connect(tvStore.host)
                     retryMs = 1_000L
                     linked = true
                     return@launch
@@ -343,11 +343,11 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             remoteGate.withLock {
                 status = "Opening $name"
-                val host = shieldStore.host
+                val host = tvStore.host
                 val directory = getApplication<Application>().filesDir
                 val reported = Handler(Looper.getMainLooper())
                 status = withContext(Dispatchers.IO) {
-                    ShieldAdb.play(directory, host, name) { message ->
+                    TvAdb.play(directory, host, name) { message ->
                         reported.post { status = message }
                     }
                 }

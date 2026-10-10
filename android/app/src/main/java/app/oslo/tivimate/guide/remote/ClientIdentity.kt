@@ -28,6 +28,7 @@ internal object ClientIdentityStore {
     private const val NAME = "tivimate-guide"
 
     fun loadOrCreate(directory: File): ClientIdentity {
+        // File names predate multi-device support; renaming them would drop the existing pairing.
         val certFile = File(directory, "shield-cert.pem")
         val keyFile = File(directory, "shield-key.pem")
         if (certFile.exists() && keyFile.exists()) {
