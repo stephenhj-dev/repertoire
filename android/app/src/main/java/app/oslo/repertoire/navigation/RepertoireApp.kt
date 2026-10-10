@@ -53,7 +53,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.toRoute
 import app.oslo.repertoire.GuideRow
 import app.oslo.repertoire.GuideViewModel
 import app.oslo.repertoire.data.splitDisplayName
@@ -233,8 +232,8 @@ private fun NavGraphBuilder.pushed(model: GuideViewModel, nav: NavHostController
             onPerson = { nav.navigate(PersonRoute(it.id, it.name)) },
         )
     }
-    screen<PersonRoute>(pushed = true) { entry ->
-        PersonScreen(entry.toRoute<PersonRoute>().name, onBack = { nav.popBackStack() })
+    screen<PersonRoute>(pushed = true) {
+        PersonScreen(model, onBack = { nav.popBackStack() }, onTitle = { nav.navigate(it) })
     }
     screen<WatchlistRoute>(pushed = true) { WatchlistScreen(onBack = { nav.popBackStack() }) }
 }
