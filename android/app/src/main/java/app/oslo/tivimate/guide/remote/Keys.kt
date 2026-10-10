@@ -27,7 +27,7 @@ internal object Keys {
     const val END_LONG = 2
     const val SHORT = 3
 
-    const val TIVIMATE = "ar.tvplayer.tv"
+    const val TIVIMATE = app.oslo.tivimate.guide.tune.TiviMate.PLAYER
 
     fun digit(number: Int): Int = DIGIT_0 + number
 }

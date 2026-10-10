@@ -35,6 +35,19 @@ class AdbRemote(private val directory: File) {
         }
     }
 
+    suspend fun launchTiviMate(host: String, packageName: String): Boolean = withContext(Dispatchers.IO) {
+        TiviMate.launch(TvShell { command -> runBlockingShell(host, command) }, packageName)
+    }
+
+    private fun runBlockingShell(host: String, command: String): String = synchronized(this) {
+        try {
+            open(host).shell(command).allOutput
+        } catch (error: Exception) {
+            closeLocked()
+            open(host).shell(command).allOutput
+        }
+    }
+
     fun close() {
         synchronized(this) { closeLocked() }
     }

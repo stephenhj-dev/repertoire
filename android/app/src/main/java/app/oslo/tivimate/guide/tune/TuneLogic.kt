@@ -40,11 +40,27 @@ fun parseNodes(xml: String): List<UiNode> {
 
 fun keyboardShown(dump: String) = "mInputShown=true" in dump
 
-fun tivimateInFront(dump: String): Boolean {
+/**
+ * TiviMate is resumed. Matches mResumedActivity (Android 9-11, Fire OS), topResumedActivity
+ * (Android 10+) and ResumedActivity (Android 12+ / Google TV).
+ */
+fun tivimateInFront(dump: String, packageName: String = TiviMate.PLAYER): Boolean {
     return dump.lineSequence().any { line ->
-        ("mResumedActivity" in line || "topResumedActivity" in line) && "ar.tvplayer.tv" in line
+        "ResumedActivity" in line && "LastResumed" !in line && "$packageName/" in line
     }
 }
+
+/** TiviMate's layout was measured on a 1920x1080 UI; this is the ratio for the current dump. */
+const val REFERENCE_HEIGHT = 1080
+
+fun screenScale(items: List<UiNode>): Float {
+    val root = items.firstOrNull() ?: return 1f
+    val height = root.bottom - root.top
+    if (root.left != 0 || root.top != 0 || height < 400) return 1f
+    return (height.toFloat() / REFERENCE_HEIGHT).coerceIn(0.5f, 4f)
+}
+
+fun scaled(value: Int, scale: Float): Int = if (scale == 1f) value else (value * scale).toInt()
 
 fun inSearch(items: List<UiNode>): Boolean {
     if (items.any { it.className.endsWith("StreamingTextView") }) return true
@@ -58,8 +74,9 @@ fun onMainMenu(items: List<UiNode>): Boolean {
 }
 
 fun hasResultCard(items: List<UiNode>): Boolean {
+    val edge = scaled(200, screenScale(items))
     return items.any {
-        it.className.endsWith("ViewGroup") && it.clickable && it.top > 200 && it.bottom - it.top > 200
+        it.className.endsWith("ViewGroup") && it.clickable && it.top > edge && it.bottom - it.top > edge
     }
 }
 
@@ -71,8 +88,9 @@ fun selectedTitle(items: List<UiNode>): String {
     items.firstOrNull {
         !it.className.endsWith("StreamingTextView") && it.selected && it.text.isNotEmpty()
     }?.let { return it.text }
+    val edge = scaled(200, screenScale(items))
     return items.firstOrNull {
-        it.focused && it.text.isNotEmpty() && it.top > 200
+        it.focused && it.text.isNotEmpty() && it.top > edge
     }?.text.orEmpty()
 }
 

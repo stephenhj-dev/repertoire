@@ -15,6 +15,8 @@ data class AdbStatus(
     val support: Support = if (ok) Support.Yes else Support.Unknown,
     val manufacturer: String = "",
     val model: String = "",
+    /** Installed TiviMate player package; null when it is missing or ADB did not answer. */
+    val tivimate: String? = null,
 ) {
     val fireTv: Boolean get() = isFireTv(manufacturer, model)
 }
@@ -26,26 +28,37 @@ object TvAdb {
         if (address.isBlank()) return AdbStatus(false, "Enter the TV address.", Support.Unknown)
         return try {
             Dadb.create(address, TvPorts.ADB, keys(directory), 4_000, 8_000).use { dadb ->
-                val lines = dadb.shell("getprop ro.product.manufacturer; getprop ro.product.model")
-                    .output.lines().map { it.trim() }
+                val lines = dadb.shell(
+                    "getprop ro.product.manufacturer; getprop ro.product.model; pm list packages ar.tvplayer",
+                ).output.lines().map { it.trim() }
                 val manufacturer = lines.getOrNull(0).orEmpty()
                 val model = lines.getOrNull(1).orEmpty()
+                val player = TiviMate.installedPlayer(lines.drop(2).joinToString("\n"))
                 val label = listOf(manufacturer, model).filter { it.isNotBlank() }.distinct()
                     .joinToString(" ").ifBlank { "The TV" }
-                AdbStatus(true, "Debugging is connected on $address. $label is answering.", Support.Yes, manufacturer, model)
+                val detail = "Debugging is connected on $address. $label is answering." +
+                    if (player == null) " TiviMate is not installed on this TV." else ""
+                AdbStatus(true, detail, Support.Yes, manufacturer, model, player)
             }
         } catch (error: Exception) {
             AdbStatus(false, advice(error), support(error))
         }
     }
 
-    fun play(directory: File, host: String, name: String, report: (String) -> Unit): String {
+    fun play(
+        directory: File,
+        host: String,
+        name: String,
+        packageName: String = TiviMate.PLAYER,
+        report: (String) -> Unit,
+    ): String {
         val address = host.substringBefore(":").trim()
         if (address.isBlank()) return "Choose a TV on the Devices page first."
         report("Connecting to the TV. Allow this phone if it asks.")
         return try {
             Dadb.create(address, TvPorts.ADB, keys(directory), 8_000, 45_000).use { dadb ->
-                TiviMateTuner(TvShell { command -> dadb.shell(command).allOutput }).play(name, report)
+                TiviMateTuner(TvShell { command -> dadb.shell(command).allOutput }, packageName = packageName)
+                    .play(name, report)
             }
         } catch (error: Exception) {
             val text = error.message.orEmpty()

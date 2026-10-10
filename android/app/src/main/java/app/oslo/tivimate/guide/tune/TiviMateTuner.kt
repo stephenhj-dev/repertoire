@@ -6,6 +6,7 @@ fun interface TvShell {
 
 class TiviMateTuner(
     private val shell: TvShell,
+    private val packageName: String = TiviMate.PLAYER,
     private val pause: (Long) -> Unit = { Thread.sleep(it) },
 ) {
     fun play(name: String, report: (String) -> Unit = {}): String {
@@ -20,7 +21,7 @@ class TiviMateTuner(
     }
 
     private fun ensureSearch(): List<UiNode> {
-        shell.exec("am start -n ar.tvplayer.tv/.ui.MainActivity")
+        TiviMate.launch(shell, packageName)
         pause(500)
         var items = dumpNodes()
         if (inSearch(items)) return items
@@ -32,8 +33,8 @@ class TiviMateTuner(
             }
             key("KEYCODE_BACK")
             pause(450)
-            if (!tivimateInFront(shell.exec("dumpsys activity activities"))) {
-                shell.exec("am start -n ar.tvplayer.tv/.ui.MainActivity")
+            if (!tivimateInFront(shell.exec("dumpsys activity activities"), packageName)) {
+                TiviMate.launch(shell, packageName)
                 pause(700)
             }
             items = dumpNodes()
@@ -44,15 +45,17 @@ class TiviMateTuner(
     }
 
     private fun openSearch(items: List<UiNode>): List<UiNode> {
-        val search = items.firstOrNull { it.text == "Search" && it.left < 500 } ?: return items
-        tap(32, (search.top - 16).coerceAtLeast(0), 408, search.bottom + 16)
+        val scale = screenScale(items)
+        val search = items.firstOrNull { it.text == "Search" && it.left < scaled(500, scale) } ?: return items
+        val pad = scaled(16, scale)
+        tap(scaled(32, scale), (search.top - pad).coerceAtLeast(0), scaled(408, scale), search.bottom + pad)
         pause(800)
         return dumpNodes()
     }
 
     private fun focusField(items: List<UiNode>) {
         val field = items.firstOrNull { it.className.endsWith("StreamingTextView") }
-            ?: items.firstOrNull { it.text in setOf("Speak to search", "Search") && it.top < 180 }
+            ?: items.firstOrNull { it.text in setOf("Speak to search", "Search") && it.top < scaled(180, screenScale(items)) }
             ?: return
         tap(field.left, field.top, field.right, field.bottom)
         pause(300)

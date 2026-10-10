@@ -23,6 +23,7 @@ import app.oslo.tivimate.guide.remote.probeRemoteV2
 import app.oslo.tivimate.guide.remote.remoteSupport
 import app.oslo.tivimate.guide.remote.scanTvs
 import app.oslo.tivimate.guide.tune.AdbRemote
+import app.oslo.tivimate.guide.tune.TiviMate
 import app.oslo.tivimate.guide.tune.TvAdb
 import android.os.Handler
 import android.os.Looper
@@ -77,6 +78,7 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
     var remoteV2 by mutableStateOf(tvStore.remoteV2)
     var adbSupport by mutableStateOf(tvStore.adb)
     var fireTv by mutableStateOf(false)
+    private var tivimatePackage = TiviMate.PLAYER
     var section by mutableStateOf(Section.Tv)
     var query by mutableStateOf("")
     var rows by mutableStateOf<List<GuideRow>>(emptyList())
@@ -209,6 +211,7 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
                     tvStore.model = result.model
                     devices = devices.map { if (it.host == address) it.copy(model = result.model, fireTv = fireTv) else it }
                 }
+                result.tivimate?.let { tivimatePackage = it }
                 adbOk = result.ok
                 adbDetail = result.detail
             } finally {
@@ -437,7 +440,7 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
     fun launchTiviMate() = send {
         when (transport) {
             NavTransport.RemoteV2 -> remote.launchTiviMate()
-            else -> adbRemote.shell(tvStore.host, "am start -n ${Keys.TIVIMATE}/.ui.MainActivity")
+            else -> if (!adbRemote.launchTiviMate(tvStore.host, tivimatePackage)) status = "Could not open TiviMate"
         }
     }
 
@@ -489,7 +492,7 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
                 val directory = getApplication<Application>().filesDir
                 val reported = Handler(Looper.getMainLooper())
                 status = withContext(Dispatchers.IO) {
-                    TvAdb.play(directory, host, name) { message ->
+                    TvAdb.play(directory, host, name, tivimatePackage) { message ->
                         reported.post { status = message }
                     }
                 }
