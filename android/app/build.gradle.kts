@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -17,7 +19,29 @@ android {
         versionName = "1.0.0"
     }
 
+    // Shared signing key for debug and release builds, kept outside the repo.
+    // keystore.properties (gitignored) points at it; builds fall back to the
+    // default debug key when it's missing.
+    val keystoreProps = Properties().apply {
+        val f = rootProject.file("keystore.properties")
+        if (f.exists()) f.inputStream().use { load(it) }
+    }
+    signingConfigs {
+        if (keystoreProps.getProperty("storeFile") != null) {
+            create("upload") {
+                storeFile = file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
+        signingConfigs.findByName("upload")?.let { upload ->
+            getByName("debug") { signingConfig = upload }
+            getByName("release") { signingConfig = upload }
+        }
         release {
             isMinifyEnabled = false
         }

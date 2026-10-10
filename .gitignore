@@ -10,3 +10,4 @@ captures/
 
 # Local API keys
 tmdb.properties
+keystore.properties
