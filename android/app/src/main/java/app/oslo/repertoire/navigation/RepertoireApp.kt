@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -147,7 +146,7 @@ fun RepertoireApp(model: GuideViewModel) {
                     NavHost(
                         navController = nav,
                         startDestination = if (model.setupNeeded) SetupGraph else MainGraph,
-                        modifier = Modifier.fillMaxSize().consumeWindowInsets(bottom),
+                        modifier = Modifier.fillMaxSize(),
                         enterTransition = { fadeIn(tween(DURATION)) + scaleIn(tween(DURATION), initialScale = 0.98f) },
                         exitTransition = { fadeOut(tween(DURATION / 2)) },
                         popEnterTransition = { fadeIn(tween(DURATION)) },

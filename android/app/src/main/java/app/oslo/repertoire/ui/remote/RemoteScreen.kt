@@ -109,6 +109,12 @@ fun RemoteScreen(
         TopAppBar(
             title = { Text("Remote") },
             actions = {
+                IconButton(onClick = { model.tap(Keys.MEDIA_AUDIO_TRACK) }) {
+                    Icon(Icons.Rounded.Audiotrack, contentDescription = "Audio track")
+                }
+                IconButton(onClick = { model.tap(Keys.CAPTIONS) }) {
+                    Icon(Icons.Rounded.Subtitles, contentDescription = "Subtitles")
+                }
                 IconButton(onClick = { numpad = true }) {
                     Icon(Icons.Rounded.Dialpad, contentDescription = "Number pad")
                 }
@@ -143,9 +149,9 @@ fun RemoteScreen(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(4.dp))
             DPad(model)
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                 IconKey(Icons.AutoMirrored.Rounded.ArrowBack, "Back", onClick = { model.tap(Keys.BACK) })
                 IconKey(Icons.Rounded.Home, "Home", onClick = { model.tap(Keys.HOME) })
@@ -158,7 +164,7 @@ fun RemoteScreen(
                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
             }
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(16.dp))
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 28.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -179,10 +185,10 @@ fun RemoteScreen(
                     onUp = hold(Keys.VOLUME_UP),
                     onDown = hold(Keys.VOLUME_DOWN),
                 )
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     RemoteKey(
                         "Play or pause",
-                        Modifier.size(84.dp),
+                        Modifier.size(80.dp),
                         onClick = model::playPause,
                         container = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -210,34 +216,18 @@ fun RemoteScreen(
                     onDown = hold(Keys.CHANNEL_DOWN),
                 )
             }
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconKey(Icons.Rounded.SkipPrevious, "Previous", size = 56.dp, onClick = { model.tap(Keys.MEDIA_PREVIOUS) })
                 IconKey(Icons.Rounded.FastRewind, "Rewind", size = 56.dp, onHold = hold(Keys.MEDIA_REWIND))
                 IconKey(Icons.Rounded.FastForward, "Fast forward", size = 56.dp, onHold = hold(Keys.MEDIA_FAST_FORWARD))
                 IconKey(Icons.Rounded.SkipNext, "Next", size = 56.dp, onClick = { model.tap(Keys.MEDIA_NEXT) })
             }
-            Spacer(Modifier.height(16.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                PillKey(Icons.Rounded.Audiotrack, "Audio") { model.tap(Keys.MEDIA_AUDIO_TRACK) }
-                PillKey(Icons.Rounded.Subtitles, "Subtitles") { model.tap(Keys.CAPTIONS) }
-            }
         }
     }
     if (numpad) {
         ModalBottomSheet(onDismissRequest = { numpad = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
             NumberPad(onDigit = model::digit)
-        }
-    }
-}
-
-@Composable
-private fun PillKey(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
-    RemoteKey(label, Modifier.height(52.dp), onClick = onClick, shape = CircleShape) {
-        Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(8.dp))
-            Text(label, style = MaterialTheme.typography.labelLarge)
         }
     }
 }
@@ -251,18 +241,18 @@ private fun PillKey(icon: androidx.compose.ui.graphics.vector.ImageVector, label
 private fun DPad(model: GuideViewModel) {
     val ring = MaterialTheme.colorScheme.surfaceContainerHigh
     Box(
-        Modifier.size(264.dp).clip(CircleShape).background(ring),
+        Modifier.size(236.dp).clip(CircleShape).background(ring),
         contentAlignment = Alignment.Center,
     ) {
-        val arrow = Modifier.size(88.dp)
+        val arrow = Modifier.size(80.dp)
         val clear = Color.Transparent
-        IconKey(Icons.Rounded.KeyboardArrowUp, "Up", arrow.align(Alignment.TopCenter), 88.dp, onClick = { model.tap(Keys.DPAD_UP) }, container = clear)
-        IconKey(Icons.Rounded.KeyboardArrowDown, "Down", arrow.align(Alignment.BottomCenter), 88.dp, onClick = { model.tap(Keys.DPAD_DOWN) }, container = clear)
-        IconKey(Icons.Rounded.KeyboardArrowLeft, "Left", arrow.align(Alignment.CenterStart), 88.dp, onClick = { model.tap(Keys.DPAD_LEFT) }, container = clear)
-        IconKey(Icons.Rounded.KeyboardArrowRight, "Right", arrow.align(Alignment.CenterEnd), 88.dp, onClick = { model.tap(Keys.DPAD_RIGHT) }, container = clear)
+        IconKey(Icons.Rounded.KeyboardArrowUp, "Up", arrow.align(Alignment.TopCenter), 80.dp, onClick = { model.tap(Keys.DPAD_UP) }, container = clear)
+        IconKey(Icons.Rounded.KeyboardArrowDown, "Down", arrow.align(Alignment.BottomCenter), 80.dp, onClick = { model.tap(Keys.DPAD_DOWN) }, container = clear)
+        IconKey(Icons.Rounded.KeyboardArrowLeft, "Left", arrow.align(Alignment.CenterStart), 80.dp, onClick = { model.tap(Keys.DPAD_LEFT) }, container = clear)
+        IconKey(Icons.Rounded.KeyboardArrowRight, "Right", arrow.align(Alignment.CenterEnd), 80.dp, onClick = { model.tap(Keys.DPAD_RIGHT) }, container = clear)
         RemoteKey(
             "OK",
-            Modifier.size(104.dp),
+            Modifier.size(96.dp),
             onClick = { model.tap(Keys.DPAD_CENTER) },
             container = MaterialTheme.colorScheme.primaryContainer,
             contentColor = MaterialTheme.colorScheme.onPrimaryContainer,

@@ -92,7 +92,7 @@ private fun SetupStep(
     scroll: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
+    Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             if (onBack != null) {
                 IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") }
@@ -206,9 +206,11 @@ fun SetupPortalScreen(model: GuideViewModel, onBack: () -> Unit, onNext: () -> U
         title = "Sign in to your IPTV service",
         body = "Repertoire reads your channel list from the same Xtream Codes portal TiviMate uses.",
         onBack = onBack,
-        primary = if (model.hasPortal) "Continue" else "Skip for now",
+        primary = "Continue",
         onPrimary = onNext,
-        secondary = null,
+        primaryEnabled = model.hasPortal,
+        secondary = "Skip for now",
+        onSecondary = onNext,
     ) {
         PortalForm(model, submitLabel = if (model.hasPortal) "Sign in again" else "Sign in", onSuccess = onNext)
         Spacer(Modifier.height(16.dp))

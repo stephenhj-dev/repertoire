@@ -158,14 +158,14 @@ fun Rocker(
 ) {
     Column(
         modifier
-            .width(76.dp)
-            .clip(RoundedCornerShape(38.dp))
+            .width(72.dp)
+            .clip(RoundedCornerShape(36.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         RemoteKey(
             upLabel,
-            Modifier.fillMaxWidth().size(76.dp),
+            Modifier.fillMaxWidth().size(64.dp),
             onHold = onUp,
             shape = RoundedCornerShape(38.dp),
             container = Color.Transparent,
@@ -178,7 +178,7 @@ fun Rocker(
         )
         RemoteKey(
             downLabel,
-            Modifier.fillMaxWidth().size(76.dp),
+            Modifier.fillMaxWidth().size(64.dp),
             onHold = onDown,
             shape = RoundedCornerShape(38.dp),
             container = Color.Transparent,

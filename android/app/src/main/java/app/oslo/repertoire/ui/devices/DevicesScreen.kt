@@ -95,7 +95,7 @@ fun DevicesScreen(model: GuideViewModel, tv: TvStatus, onBack: () -> Unit) {
             },
         )
         LazyColumn(
-            Modifier.fillMaxSize().imePadding(),
+            Modifier.fillMaxSize().navigationBarsPadding().imePadding(),
             contentPadding = PaddingValues(bottom = 32.dp),
         ) {
             deviceList(model, tv)
