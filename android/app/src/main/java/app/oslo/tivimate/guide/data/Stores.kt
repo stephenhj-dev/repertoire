@@ -95,3 +95,40 @@ class TvStore(context: Context) {
         get() = preferences.getBoolean("keepConnected", true)
         set(value) { preferences.edit().putBoolean("keepConnected", value).apply() }
 }
+
+/** Starred titles, keyed by [favoriteKey] so they survive catalog refreshes. */
+class FavoritesStore(context: Context) {
+    private val preferences = context.getSharedPreferences("favorites", Context.MODE_PRIVATE)
+
+    val keys: Set<String>
+        get() = preferences.getStringSet("keys", emptySet()).orEmpty().toSet()
+
+    fun toggle(key: String): Boolean {
+        val current = keys
+        val on = key !in current
+        preferences.edit().putStringSet("keys", if (on) current + key else current - key).apply()
+        return on
+    }
+}
+
+/** Appearance, onboarding and search history. */
+class UiPrefs(context: Context) {
+    private val preferences = context.getSharedPreferences("ui", Context.MODE_PRIVATE)
+
+    var themeMode: String
+        get() = preferences.getString("themeMode", "System") ?: "System"
+        set(value) { preferences.edit().putString("themeMode", value).apply() }
+
+    var dynamicColor: Boolean
+        get() = preferences.getBoolean("dynamicColor", true)
+        set(value) { preferences.edit().putBoolean("dynamicColor", value).apply() }
+
+    /** True once setup was finished or skipped. */
+    var setupDone: Boolean
+        get() = preferences.getBoolean("setupDone", false)
+        set(value) { preferences.edit().putBoolean("setupDone", value).apply() }
+
+    var recentSearches: List<String>
+        get() = preferences.getString("recentSearches", "").orEmpty().split('\n').filter { it.isNotBlank() }
+        set(value) { preferences.edit().putString("recentSearches", value.take(8).joinToString("\n")).apply() }
+}

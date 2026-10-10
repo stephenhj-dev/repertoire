@@ -33,6 +33,8 @@ data class TitleRow(
     val banner: Boolean,
     val sortOrder: Int,
     val section: String? = null,
+    /** Channel logo (stream_icon) or series/movie cover URL from the portal. */
+    val icon: String? = null,
 )
 
 @Entity(tableName = "groups", primaryKeys = ["kind", "categoryId"])
@@ -66,6 +68,19 @@ interface CatalogDao {
 
     @Query("SELECT COUNT(*) FROM titles WHERE banner = 0")
     suspend fun titleCount(): Int
+
+    @Query("SELECT kind AS code, COUNT(*) AS count FROM titles WHERE banner = 0 GROUP BY kind")
+    suspend fun kindCounts(): List<CodeCount>
+
+    @Query(
+        """
+        SELECT * FROM titles
+        WHERE banner = 0 AND (kind || char(9) || name) IN (:keys)
+        GROUP BY kind, name
+        ORDER BY CASE kind WHEN 'live' THEN 0 WHEN 'movie' THEN 1 ELSE 2 END, name COLLATE NOCASE
+        """,
+    )
+    suspend fun favorites(keys: List<String>): List<TitleRow>
 
     @Query(
         """
@@ -236,7 +251,7 @@ interface CatalogDao {
     ): List<TitleRow>
 }
 
-@Database(entities = [TitleRow::class, GroupRow::class], version = 2, exportSchema = false)
+@Database(entities = [TitleRow::class, GroupRow::class], version = 3, exportSchema = false)
 abstract class CatalogDatabase : RoomDatabase() {
     abstract fun catalog(): CatalogDao
 
@@ -244,6 +259,12 @@ abstract class CatalogDatabase : RoomDatabase() {
         private val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE titles ADD COLUMN section TEXT")
+            }
+        }
+
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE titles ADD COLUMN icon TEXT")
             }
         }
 
@@ -255,7 +276,7 @@ abstract class CatalogDatabase : RoomDatabase() {
                     context.applicationContext,
                     CatalogDatabase::class.java,
                     "guide.db",
-                ).addMigrations(MIGRATION_1_2)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .fallbackToDestructiveMigration()
                     .build()
                     .also { instance = it }

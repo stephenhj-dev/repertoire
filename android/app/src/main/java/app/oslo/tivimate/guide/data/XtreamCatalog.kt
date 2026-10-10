@@ -19,10 +19,85 @@ object PortalUrl {
         return value
     }
 
-    fun action(portal: String, username: String, password: String, action: String): String {
+    fun action(portal: String, username: String, password: String, action: String): String =
+        "${account(portal, username, password)}&action=$action"
+
+    /** player_api.php without an action answers with the account (user_info) and server info. */
+    fun account(portal: String, username: String, password: String): String {
         val user = URLEncoder.encode(username, Charsets.UTF_8.name())
         val pass = URLEncoder.encode(password, Charsets.UTF_8.name())
-        return "${normalize(portal)}/player_api.php?username=$user&password=$pass&action=$action"
+        return "${normalize(portal)}/player_api.php?username=$user&password=$pass"
+    }
+
+    internal fun open(url: String): HttpURLConnection {
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 20_000
+            readTimeout = 180_000
+            setRequestProperty("User-Agent", "TivimateGuide/1.0")
+        }
+        val code = connection.responseCode
+        if (code !in 200..299) {
+            connection.disconnect()
+            throw PortalHttpException(code)
+        }
+        return connection
+    }
+}
+
+/** What the portal says about the account. Dates are epoch seconds. */
+data class PortalAccount(
+    val status: String = "",
+    val expires: Long? = null,
+    val maxConnections: Int? = null,
+    val activeConnections: Int? = null,
+)
+
+object PortalCheck {
+    /** Signs in once and reads user_info. Throws a Portal*Exception or an IO error. Blocking. */
+    fun verify(portal: String, username: String, password: String): PortalAccount {
+        val connection = PortalUrl.open(PortalUrl.account(portal, username, password))
+        try {
+            JsonReader(connection.inputStream.bufferedReader()).use { reader ->
+                if (reader.peek() != JsonToken.BEGIN_OBJECT) throw PortalFormatException("Not an Xtream account answer")
+                var account: PortalAccount? = null
+                var auth = 0
+                reader.beginObject()
+                while (reader.hasNext()) {
+                    if (reader.nextName() == "user_info" && reader.peek() == JsonToken.BEGIN_OBJECT) {
+                        val info = HashMap<String, String>()
+                        reader.beginObject()
+                        while (reader.hasNext()) {
+                            val key = reader.nextName()
+                            when (reader.peek()) {
+                                JsonToken.STRING, JsonToken.NUMBER -> info[key] = reader.nextString()
+                                JsonToken.BOOLEAN -> info[key] = if (reader.nextBoolean()) "1" else "0"
+                                else -> reader.skipValue()
+                            }
+                        }
+                        reader.endObject()
+                        auth = info["auth"]?.toIntOrNull() ?: 0
+                        account = PortalAccount(
+                            status = info["status"].orEmpty(),
+                            expires = info["exp_date"]?.toLongOrNull(),
+                            maxConnections = info["max_connections"]?.toIntOrNull(),
+                            activeConnections = info["active_cons"]?.toIntOrNull(),
+                        )
+                    } else {
+                        reader.skipValue()
+                    }
+                }
+                reader.endObject()
+                if (account == null) throw PortalFormatException("No user_info in the answer")
+                if (auth != 1) throw PortalAuthException()
+                return account
+            }
+        } catch (error: IllegalStateException) {
+            throw PortalFormatException(error.message ?: "Unreadable answer")
+        } catch (error: java.io.EOFException) {
+            throw PortalFormatException("Empty answer")
+        } finally {
+            connection.disconnect()
+        }
     }
 }
 
@@ -101,7 +176,8 @@ class CatalogSync(private val database: CatalogDatabase) {
             val name = item["name"]?.trim().orEmpty()
             val id = item[idKey] ?: return@readArray
             if (name.isEmpty()) return@readArray
-            incoming += Incoming(name, id, item["category_id"])
+            val icon = (item["stream_icon"] ?: item["cover"])?.trim()?.takeIf { it.startsWith("http") }
+            incoming += Incoming(name, id, item["category_id"], icon)
             if (incoming.size % 5000 == 0) onProgress("$kind ${incoming.size}")
         }
         val classes = if (kind == "live") {
@@ -121,21 +197,17 @@ class CatalogSync(private val database: CatalogDatabase) {
                 banner = mark.banner,
                 sortOrder = index,
                 section = if (mark.banner) null else mark.section,
+                icon = row.icon,
             )
         }
     }
 
     private fun readArray(url: String, onItem: (Map<String, String>) -> Unit) {
-        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 20_000
-            readTimeout = 180_000
-            setRequestProperty("User-Agent", "TivimateGuide/1.0")
-        }
+        val connection = PortalUrl.open(url)
         try {
-            val code = connection.responseCode
-            if (code !in 200..299) error("The portal returned $code")
             JsonReader(connection.inputStream.bufferedReader()).use { reader ->
-                if (reader.peek() != JsonToken.BEGIN_ARRAY) error("The portal did not return a catalog")
+                if (reader.peek() == JsonToken.BEGIN_OBJECT) throw PortalAuthException()
+                if (reader.peek() != JsonToken.BEGIN_ARRAY) throw PortalFormatException("The portal did not return a catalog")
                 reader.beginArray()
                 while (reader.hasNext()) onItem(readObject(reader))
                 reader.endArray()
@@ -150,7 +222,7 @@ class CatalogSync(private val database: CatalogDatabase) {
         reader.beginObject()
         while (reader.hasNext()) {
             val key = reader.nextName()
-            if (key != "name" && key != "stream_id" && key != "series_id" && key != "category_id" && key != "category_name") {
+            if (key !in FIELDS) {
                 reader.skipValue()
                 continue
             }
@@ -164,5 +236,9 @@ class CatalogSync(private val database: CatalogDatabase) {
         return values
     }
 
-    private data class Incoming(val name: String, val remoteId: String, val categoryId: String?)
+    private data class Incoming(val name: String, val remoteId: String, val categoryId: String?, val icon: String?)
+
+    private companion object {
+        val FIELDS = setOf("name", "stream_id", "series_id", "category_id", "category_name", "stream_icon", "cover")
+    }
 }
