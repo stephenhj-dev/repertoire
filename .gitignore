@@ -7,3 +7,6 @@ captures/
 *.apk
 *.jks
 .DS_Store
+
+# Local API keys
+tmdb.properties

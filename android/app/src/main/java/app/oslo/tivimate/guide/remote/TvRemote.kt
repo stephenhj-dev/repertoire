@@ -211,7 +211,7 @@ private class CommandSession(
     private val ready = CompletableDeferred<Unit>()
 
     suspend fun open() {
-        val opened = tlsSocket(identity, host, 6466)
+        val opened = tlsSocket(identity, host, TvPorts.REMOTE)
         socket = opened
         output = opened.outputStream
         val thread = Thread({ readLoop(opened.inputStream) }, "tv-remote")
@@ -340,7 +340,7 @@ private class PairingSession(
     private val paired = CompletableDeferred<Unit>()
 
     suspend fun awaitCode() {
-        val opened = tlsSocket(identity, host, 6467) { serverCert = it }
+        val opened = tlsSocket(identity, host, TvPorts.PAIRING) { serverCert = it }
         socket = opened
         output = opened.outputStream
         val thread = Thread({ readLoop(opened.inputStream) }, "tv-pair")
@@ -490,4 +490,21 @@ private fun tlsSocket(
     socket.startHandshake()
     peer?.let(onPeer)
     return socket
+}
+
+/**
+ * Checks whether the Android TV Remote v2 service answers on [host]. A refused connection
+ * means the device has no such service (Fire TV, plain Android boxes); a timeout is inconclusive.
+ */
+suspend fun probeRemoteV2(host: String, timeoutMs: Int = 1_500): Support = withContext(Dispatchers.IO) {
+    val address = host.substringBefore(":").trim()
+    if (address.isBlank()) return@withContext Support.Unknown
+    try {
+        java.net.Socket().use { it.connect(java.net.InetSocketAddress(address, TvPorts.REMOTE), timeoutMs) }
+        Support.Yes
+    } catch (_: java.net.ConnectException) {
+        Support.No
+    } catch (_: Exception) {
+        Support.Unknown
+    }
 }

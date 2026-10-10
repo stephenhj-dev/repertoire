@@ -78,6 +78,8 @@ import app.oslo.tivimate.guide.Page
 import app.oslo.tivimate.guide.R
 import app.oslo.tivimate.guide.Section
 import app.oslo.tivimate.guide.remote.Keys
+import app.oslo.tivimate.guide.remote.NavTransport
+import app.oslo.tivimate.guide.remote.Support
 import kotlinx.coroutines.delay
 
 @Composable
@@ -292,7 +294,7 @@ private fun DevicesScreen(model: GuideViewModel, waiting: Boolean, detail: Strin
             Text("Shields on this network", color = Mist, fontSize = 13.sp)
         }
         itemsIndexed(model.devices) { _, device ->
-            val selected = device.host == model.host
+            val selected = device.host == model.selectedHost
             Column(
                 Modifier
                     .fillMaxWidth()
@@ -315,13 +317,17 @@ private fun DevicesScreen(model: GuideViewModel, waiting: Boolean, detail: Strin
                 Spacer(Modifier.height(10.dp))
                 Text(
                     when {
-                        !selected -> "Tap to use this address"
-                        model.checkingAdb -> "Checking the debugging connection"
+                        !selected -> "Tap to use this TV"
+                        model.checkingAdb -> "Checking what this TV supports"
                         else -> model.adbDetail
                     },
                     color = if (selected && model.adbOk == true) Good else Mist,
                     fontSize = 13.sp,
                 )
+                if (selected) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(capabilityLine(model), color = Foam, fontSize = 13.sp)
+                }
             }
         }
         item { Field("Shield address", model.host) { model.host = it } }
@@ -331,7 +337,7 @@ private fun DevicesScreen(model: GuideViewModel, waiting: Boolean, detail: Strin
                 PrimaryButton(if (model.scanning) "Scanning" else "Find", model::findTv)
             }
         }
-        item { PrimaryButton(if (model.checkingAdb) "Checking" else "Check debugging", model::checkAdb) }
+        item { PrimaryButton(if (model.checkingAdb) "Checking" else "Check device", model::checkDevice) }
         item {
             Text(
                 if (linked) "Remote link: $detail" else "Remote link: ${detail.ifBlank { "not paired" }}",
@@ -339,9 +345,22 @@ private fun DevicesScreen(model: GuideViewModel, waiting: Boolean, detail: Strin
                 fontSize = 13.sp,
             )
         }
+        if (model.fireTv || model.remoteV2 == Support.No) {
+            item {
+                Text(
+                    if (model.fireTv) {
+                        "Fire TV has no Android TV remote service. The remote sends keys over ADB debugging instead, so turn on ADB debugging in My Fire TV → Developer options."
+                    } else {
+                        "This TV has no Android TV remote service. The remote sends keys over ADB debugging instead."
+                    },
+                    color = Mist,
+                    fontSize = 13.sp,
+                )
+            }
+        }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PrimaryButton("Pair remote", model::pair)
+                if (model.remoteV2 != Support.No) PrimaryButton("Pair remote", model::pair)
                 PrimaryButton("Open remote") { model.show(Page.Remote) }
             }
         }
@@ -351,6 +370,20 @@ private fun DevicesScreen(model: GuideViewModel, waiting: Boolean, detail: Strin
         }
         if (model.status.isNotBlank()) item { Text(model.status, color = Amber, fontSize = 13.sp) }
     }
+}
+
+private fun capabilityLine(model: GuideViewModel): String {
+    fun mark(value: Support) = when (value) {
+        Support.Yes -> "yes"
+        Support.No -> "no"
+        Support.Unknown -> "?"
+    }
+    val via = when (model.transport) {
+        NavTransport.RemoteV2 -> if (model.paired) "Android TV remote" else "Android TV remote (pair first)"
+        NavTransport.Adb -> "ADB key events"
+        NavTransport.None -> "not available"
+    }
+    return "Remote service: ${mark(model.remoteV2)} · Debugging: ${mark(model.adbSupport)} · Remote uses $via"
 }
 
 @Composable
@@ -522,7 +555,17 @@ private fun RemoteScreen(
         verticalArrangement = Arrangement.spacedBy(10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        item { Text(if (connected) "Shield connected" else detail, color = if (connected) Amber else Mist) }
+        item {
+            val viaAdb = model.transport == NavTransport.Adb
+            Text(
+                when {
+                    viaAdb -> "${model.deviceName} · keys over ADB"
+                    connected -> "${model.deviceName} connected"
+                    else -> detail
+                },
+                color = if (connected || viaAdb) Amber else Mist,
+            )
+        }
         if (model.status.isNotBlank()) item { Text(model.status, color = Mist, fontSize = 13.sp) }
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {

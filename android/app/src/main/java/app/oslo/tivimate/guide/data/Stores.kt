@@ -3,6 +3,7 @@ package app.oslo.tivimate.guide.data
 import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import app.oslo.tivimate.guide.remote.Support
 
 data class PortalLogin(val url: String, val username: String, val password: String)
 
@@ -40,9 +41,38 @@ class TvStore(context: Context) {
         get() = preferences.getString("host", "192.168.1.50") ?: "192.168.1.50"
         set(value) { preferences.edit().putString("host", value.trim()).apply() }
 
+    /** Legacy flag: true once any TV was paired. Kept so older builds still see the pairing. */
     var paired: Boolean
         get() = preferences.getBoolean("paired", false)
         set(value) { preferences.edit().putBoolean("paired", value).apply() }
+
+    init {
+        // Builds before multi-device support paired exactly one TV, the saved host.
+        if (!preferences.contains("pairedHosts") && paired && host.isNotBlank()) {
+            preferences.edit().putStringSet("pairedHosts", setOf(host)).apply()
+        }
+    }
+
+    val pairedHosts: Set<String>
+        get() = preferences.getStringSet("pairedHosts", emptySet()).orEmpty().toSet()
+
+    fun isPaired(address: String): Boolean = address.trim() in pairedHosts
+
+    fun markPaired(address: String) {
+        preferences.edit()
+            .putStringSet("pairedHosts", pairedHosts + address.trim())
+            .putBoolean("paired", true)
+            .apply()
+    }
+
+    /** Capabilities last seen for the saved host; reset when the host changes. */
+    var remoteV2: Support
+        get() = Support.parse(preferences.getString("remoteV2", null))
+        set(value) { preferences.edit().putString("remoteV2", value.name).apply() }
+
+    var adb: Support
+        get() = Support.parse(preferences.getString("adb", null))
+        set(value) { preferences.edit().putString("adb", value.name).apply() }
 
     var name: String
         get() = preferences.getString("name", "") ?: ""
