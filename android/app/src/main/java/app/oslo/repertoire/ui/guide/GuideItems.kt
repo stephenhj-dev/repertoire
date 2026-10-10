@@ -1,18 +1,20 @@
 package app.oslo.repertoire.ui.guide
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.automirrored.rounded.ViewList
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -24,7 +26,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -63,8 +66,8 @@ fun BucketListItem(row: GuideRow.Bucket, onClick: () -> Unit, modifier: Modifier
 }
 
 /**
- * A channel, movie or show. Tapping plays it on the TV; the star saves it; movies and shows
- * have an info button that opens the (upcoming) detail page.
+ * A channel, movie or show; the star saves it. Channels play on the TV when tapped. Movies and
+ * shows open their detail page instead and keep a quick play button.
  */
 @Composable
 fun TitleListItem(
@@ -81,10 +84,15 @@ fun TitleListItem(
     val poster = row.kind != "live"
     ListItem(
         modifier = modifier
-            .clickable(onClickLabel = "Play on TV", role = Role.Button, onClick = onPlay)
-            .semantics {
-                if (onDetails != null) onClick(label = "Details") { onDetails(); true }
-            },
+            .then(
+                if (onDetails != null) {
+                    Modifier
+                        .clickable(onClickLabel = "Details", role = Role.Button, onClick = onDetails)
+                        .semantics { customActions = listOf(CustomAccessibilityAction("Play on TV") { onPlay(); true }) }
+                } else {
+                    Modifier.clickable(onClickLabel = "Play on TV", role = Role.Button, onClick = onPlay)
+                },
+            ),
         overlineContent = if (overline.isNotEmpty()) ({ Text(overline, maxLines = 1) }) else null,
         headlineContent = { Text(name.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
         leadingContent = {
@@ -98,9 +106,6 @@ fun TitleListItem(
         },
         trailingContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (tuning) {
-                    CircularProgressIndicator(Modifier.padding(12.dp).size(24.dp), strokeWidth = 2.5.dp)
-                }
                 IconButton(onClick = onFavorite) {
                     Icon(
                         if (favorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
@@ -108,9 +113,15 @@ fun TitleListItem(
                         tint = if (favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                if (onDetails != null) {
-                    IconButton(onClick = onDetails) {
-                        Icon(Icons.Outlined.Info, contentDescription = "Details", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (onDetails != null || tuning) {
+                    Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                        if (tuning) {
+                            CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.5.dp)
+                        } else {
+                            FilledTonalIconButton(onClick = onPlay, modifier = Modifier.size(40.dp)) {
+                                Icon(Icons.Rounded.PlayArrow, contentDescription = "Play on TV")
+                            }
+                        }
                     }
                 }
             }

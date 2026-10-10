@@ -226,8 +226,12 @@ private fun NavGraphBuilder.mainGraph(model: GuideViewModel, nav: NavHostControl
 private fun NavGraphBuilder.pushed(model: GuideViewModel, nav: NavHostController, tv: app.oslo.repertoire.remote.TvStatus) {
     screen<DevicesRoute>(pushed = true) { DevicesScreen(model, tv, onBack = { nav.popBackStack() }) }
     screen<PortalRoute>(pushed = true) { PortalScreen(model, onBack = { nav.popBackStack() }) }
-    screen<TitleDetailRoute>(pushed = true) { entry ->
-        TitleDetailScreen(entry.toRoute<TitleDetailRoute>(), model, onBack = { nav.popBackStack() })
+    screen<TitleDetailRoute>(pushed = true) {
+        TitleDetailScreen(
+            model,
+            onBack = { nav.popBackStack() },
+            onPerson = { nav.navigate(PersonRoute(it.id, it.name)) },
+        )
     }
     screen<PersonRoute>(pushed = true) { entry ->
         PersonScreen(entry.toRoute<PersonRoute>().name, onBack = { nav.popBackStack() })

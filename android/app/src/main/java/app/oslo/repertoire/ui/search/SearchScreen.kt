@@ -170,7 +170,11 @@ fun SearchScreen(
                                 },
                             )
                         },
-                        onDetails = onDetails,
+                        onDetails = {
+                            model.rememberSearch()
+                            keyboard?.hide()
+                            onDetails(it)
+                        },
                     )
                 }
             }
@@ -184,7 +188,7 @@ private fun StartPane(model: GuideViewModel, bottomInset: PaddingValues) {
         EmptyState(
             icon = Icons.AutoMirrored.Rounded.ManageSearch,
             title = "Find something to watch",
-            body = "Search every channel, movie and show in your portal. Tap a result to play it on the TV.",
+            body = "Search every channel, movie and show in your portal. Tap a channel to play it on the TV, or a movie or show for details.",
         )
         return
     }
