@@ -15,7 +15,8 @@ import app.oslo.tivimate.guide.data.countryLabel
 import app.oslo.tivimate.guide.data.likeNeedle
 import app.oslo.tivimate.guide.remote.Keys
 import app.oslo.tivimate.guide.remote.TvRemote
-import app.oslo.tivimate.guide.remote.discoverTv
+import app.oslo.tivimate.guide.remote.TvDevice
+import app.oslo.tivimate.guide.remote.scanTvs
 import app.oslo.tivimate.guide.tune.TvAdb
 import android.os.Handler
 import android.os.Looper
@@ -56,7 +57,8 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
     val remote = TvRemote(app)
 
     var page by mutableStateOf(Page.Home)
-    var devices by mutableStateOf(listOf(tvStore.host))
+    var devices by mutableStateOf(savedDevices())
+    var scanning by mutableStateOf(false)
     var adbOk by mutableStateOf<Boolean?>(null)
     var adbDetail by mutableStateOf("Not checked yet")
     var checkingAdb by mutableStateOf(false)
@@ -94,7 +96,6 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
         remote.rememberHost(host)
         remote.onSessionLost = { scheduleReconnect() }
         page = Page.Home
-        devices = listOf(tvStore.host)
         if (tvStore.paired && tvStore.keepConnected) connect()
         viewModelScope.launch {
             val meta = getApplication<Application>().getSharedPreferences("guide-meta", android.content.Context.MODE_PRIVATE)
@@ -112,14 +113,32 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
         if (page == Page.Devices) checkAdb()
     }
 
-    fun selectDevice(address: String) {
-        val clean = address.trim()
+    fun selectDevice(device: TvDevice) {
+        val clean = device.host.trim()
         if (clean.isBlank()) return
         host = clean
         tvStore.host = clean
+        tvStore.name = device.name.takeIf { it != clean }.orEmpty()
+        tvStore.model = device.model
         remote.rememberHost(clean)
-        if (clean !in devices) devices = devices + clean
+        devices = if (devices.any { it.host == clean }) {
+            devices.map { if (it.host == clean) device.copy(host = clean) else it }
+        } else {
+            devices + device.copy(host = clean)
+        }
         checkAdb()
+    }
+
+    fun useAddress(address: String) {
+        val clean = address.trim()
+        if (clean.isBlank()) return
+        selectDevice(devices.firstOrNull { it.host == clean } ?: TvDevice(host = clean, name = clean))
+    }
+
+    private fun savedDevices(): List<TvDevice> {
+        val saved = tvStore.host
+        if (saved.isBlank()) return emptyList()
+        return listOf(TvDevice(host = saved, name = tvStore.name.ifBlank { saved }, model = tvStore.model))
     }
 
     fun checkAdb() {
@@ -233,15 +252,30 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun findTv() {
+        if (scanning) return
         viewModelScope.launch {
-            status = "Looking for the Shield"
-            val found = discoverTv(getApplication())
-            if (found != null) {
-                selectDevice(found)
-                status = "Found $found"
-            } else {
-                status = "No Shield found. The address can be entered by hand."
+            scanning = true
+            status = "Looking for TVs on this network"
+            val found = try {
+                scanTvs(getApplication())
+            } finally {
+                scanning = false
             }
+            val manual = devices.filter { known -> found.none { it.host == known.host } }
+            devices = found.map { fresh ->
+                val known = devices.firstOrNull { it.host == fresh.host }
+                if (known != null && fresh.model.isBlank()) fresh.copy(model = known.model) else fresh
+            } + manual
+            found.firstOrNull { it.host == host }?.let { mine ->
+                if (mine.name != mine.host) tvStore.name = mine.name
+                if (mine.model.isNotBlank()) tvStore.model = mine.model
+            }
+            status = when {
+                found.isEmpty() -> "No TVs found. The address can be entered by hand."
+                found.size == 1 -> "Found ${found[0].name}"
+                else -> "Found ${found.size} TVs. Tap one to use it."
+            }
+            if (host.isBlank() && found.size == 1) selectDevice(found[0])
         }
     }
 

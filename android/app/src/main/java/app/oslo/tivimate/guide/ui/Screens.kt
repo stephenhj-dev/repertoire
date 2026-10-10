@@ -291,21 +291,24 @@ private fun DevicesScreen(model: GuideViewModel, waiting: Boolean, detail: Strin
         item {
             Text("Shields on this network", color = Mist, fontSize = 13.sp)
         }
-        itemsIndexed(model.devices) { _, address ->
-            val selected = address == model.host
+        itemsIndexed(model.devices) { _, device ->
+            val selected = device.host == model.host
             Column(
                 Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(18.dp))
                     .background(Card)
                     .border(1.dp, if (selected) Amber else Line, RoundedCornerShape(18.dp))
-                    .clickable { model.selectDevice(address) }
+                    .clickable { model.selectDevice(device) }
                     .padding(16.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("NVIDIA Shield", color = Foam, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
-                        Text(address, color = Amber, fontSize = 14.sp)
+                        Text(device.name, color = Foam, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+                        if (device.model.isNotBlank() && device.model != device.name) {
+                            Text(device.model, color = Mist, fontSize = 13.sp)
+                        }
+                        Text(device.host, color = Amber, fontSize = 14.sp)
                     }
                     if (selected && model.adbOk == true) GoodMark()
                 }
@@ -324,8 +327,8 @@ private fun DevicesScreen(model: GuideViewModel, waiting: Boolean, detail: Strin
         item { Field("Shield address", model.host) { model.host = it } }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PrimaryButton("Use address") { model.selectDevice(model.host) }
-                PrimaryButton("Find", model::findTv)
+                PrimaryButton("Use address") { model.useAddress(model.host) }
+                PrimaryButton(if (model.scanning) "Scanning" else "Find", model::findTv)
             }
         }
         item { PrimaryButton(if (model.checkingAdb) "Checking" else "Check debugging", model::checkAdb) }

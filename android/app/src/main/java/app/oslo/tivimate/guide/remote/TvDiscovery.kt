@@ -4,14 +4,17 @@ import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.os.Build
+import android.util.Log
 import androidx.annotation.RequiresApi
 import java.net.Inet4Address
 import java.net.InetAddress
+import java.net.NetworkInterface
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.Executor
 import kotlin.coroutines.resume
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -29,36 +32,55 @@ data class ResolvedService(
     val attributes: Map<String, String> = emptyMap(),
 )
 
-suspend fun discoverTv(context: Context, timeoutMs: Long = 4000): String? = coroutineScope {
-    val manager = context.getSystemService(NsdManager::class.java) ?: return@coroutineScope null
-    val result = CompletableDeferred<String?>()
+/**
+ * Listens for every TV-related service type for [windowMs] and returns one entry per device:
+ * Android TV / Google TV boxes and sets (Remote v2), anything with network debugging
+ * advertised, and Fire TVs (Whisperplay). Plain ADB on port 5555 is not advertised over mDNS,
+ * so such devices are found through their other services or entered by address.
+ */
+suspend fun scanTvs(context: Context, windowMs: Long = 5_000): List<TvDevice> = coroutineScope {
+    val manager = context.getSystemService(NsdManager::class.java) ?: return@coroutineScope emptyList()
+    val found = ConcurrentLinkedQueue<ResolvedService>()
     val scope = this
-    val listener = object : NsdManager.DiscoveryListener {
-        override fun onStartDiscoveryFailed(serviceType: String?, errorCode: Int) {
-            result.complete(null)
-        }
-        override fun onStopDiscoveryFailed(serviceType: String?, errorCode: Int) = Unit
-        override fun onDiscoveryStarted(serviceType: String?) = Unit
-        override fun onDiscoveryStopped(serviceType: String?) = Unit
-        override fun onServiceLost(serviceInfo: NsdServiceInfo?) = Unit
-        override fun onServiceFound(serviceInfo: NsdServiceInfo) {
-            scope.launch { manager.resolve(serviceInfo, REMOTE_SERVICE)?.let { result.complete(it.host) } }
+    val listeners = TvServiceTypes.ALL.map { type ->
+        type to object : NsdManager.DiscoveryListener {
+            override fun onStartDiscoveryFailed(serviceType: String?, errorCode: Int) {
+                Log.w("TiviGuide", "discovery $type failed $errorCode")
+            }
+            override fun onStopDiscoveryFailed(serviceType: String?, errorCode: Int) = Unit
+            override fun onDiscoveryStarted(serviceType: String?) = Unit
+            override fun onDiscoveryStopped(serviceType: String?) = Unit
+            override fun onServiceLost(serviceInfo: NsdServiceInfo?) = Unit
+            override fun onServiceFound(serviceInfo: NsdServiceInfo) {
+                scope.launch { manager.resolve(serviceInfo, type)?.let(found::add) }
+            }
         }
     }
+    val started = mutableListOf<NsdManager.DiscoveryListener>()
     try {
         withContext(Dispatchers.Main) {
-            manager.discoverServices(REMOTE_SERVICE, NsdManager.PROTOCOL_DNS_SD, listener)
+            for ((type, listener) in listeners) {
+                runCatching { manager.discoverServices(type, NsdManager.PROTOCOL_DNS_SD, listener) }
+                    .onSuccess { started += listener }
+            }
         }
-        withTimeoutOrNull(timeoutMs) { result.await() }
-    } catch (_: Exception) {
-        null
+        delay(windowMs)
     } finally {
-        runCatching { manager.stopServiceDiscovery(listener) }
-        scope.coroutineContext.cancelChildren()
+        started.forEach { runCatching { manager.stopServiceDiscovery(it) } }
     }
+    delay(RESOLVE_GRACE_MS)
+    scope.coroutineContext.cancelChildren()
+    mergeDevices(found.toList(), ownAddresses())
 }
 
-private const val REMOTE_SERVICE = "_androidtvremote2._tcp."
+private const val RESOLVE_GRACE_MS = 1_500L
+
+private fun ownAddresses(): Set<String> = runCatching {
+    NetworkInterface.getNetworkInterfaces().toList()
+        .flatMap { it.inetAddresses.toList() }
+        .mapNotNull { it.hostAddress }
+        .toSet()
+}.getOrDefault(emptySet())
 
 /**
  * Resolves one service. API 34+ uses registerServiceInfoCallback (resolveService and

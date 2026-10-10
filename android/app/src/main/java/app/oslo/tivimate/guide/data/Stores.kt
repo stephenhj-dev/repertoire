@@ -44,6 +44,14 @@ class TvStore(context: Context) {
         get() = preferences.getBoolean("paired", false)
         set(value) { preferences.edit().putBoolean("paired", value).apply() }
 
+    var name: String
+        get() = preferences.getString("name", "") ?: ""
+        set(value) { preferences.edit().putString("name", value.trim()).apply() }
+
+    var model: String
+        get() = preferences.getString("model", "") ?: ""
+        set(value) { preferences.edit().putString("model", value.trim()).apply() }
+
     var keepConnected: Boolean
         get() = preferences.getBoolean("keepConnected", true)
         set(value) { preferences.edit().putBoolean("keepConnected", value).apply() }
