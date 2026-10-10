@@ -50,7 +50,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-enum class Page { Home, Devices, Guide, Remote, Settings }
 enum class Section { All, Tv, Movies, Series, Favorites }
 enum class BucketKind { Country, Package, Section, Category }
 
@@ -80,6 +79,20 @@ data class TuneState(val name: String, val step: String)
 
 /** One-shot message for a snackbar. [retry] names a title that can be tuned again. */
 data class UiMessage(val text: String, val retry: String? = null, val openDevices: Boolean = false)
+
+/**
+ * What the Guide shows, published in one piece so a transition never pairs a new title with
+ * old rows. [key] changes when the user moves to another list (not while filtering it).
+ */
+@Immutable
+data class GuideView(
+    val key: String = "",
+    val section: Section = Section.Tv,
+    val depth: Int = 0,
+    val title: String = "",
+    val rows: List<GuideRow> = emptyList(),
+    val filtering: Boolean = false,
+)
 
 @Immutable
 data class CatalogCounts(val live: Int = 0, val movies: Int = 0, val shows: Int = 0) {
@@ -137,6 +150,8 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
     /** 0 = section root, 1 = a country/group/category, 2 = a section inside a country. */
     var depth by mutableStateOf(0)
         private set
+    var view by mutableStateOf(GuideView())
+        private set
     var tune by mutableStateOf<TuneState?>(null)
         private set
     var favorites by mutableStateOf(favoritesStore.keys)
@@ -160,7 +175,6 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
     private var globalSearchJob: Job? = null
     private var reloadJob: Job? = null
 
-    var page by mutableStateOf(Page.Home)
     var devices by mutableStateOf(savedDevices())
     var scanning by mutableStateOf(false)
     var adbOk by mutableStateOf<Boolean?>(null)
@@ -220,7 +234,6 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
         host = tvStore.host
         remote.rememberHost(host)
         remote.onSessionLost = { scheduleReconnect() }
-        page = Page.Home
         if (paired && tvStore.keepConnected) connect()
         viewModelScope.launch {
             if (!meta.getBoolean("sectionsBackfilled", false)) {
@@ -232,11 +245,6 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
             reload()
             loadCounts()
         }
-    }
-
-    fun show(page: Page) {
-        this.page = page
-        if (page == Page.Devices) checkDevice()
     }
 
     fun onDevicesShown() = checkDevice()
@@ -424,6 +432,7 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val more = nextPage(place)
             rows = rows + more
+            view = view.copy(rows = rows)
             loadingMore = false
         }
     }
@@ -860,12 +869,22 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
         reloadJob?.cancel()
         reloadJob = viewModelScope.launch {
             loading = true
-            rows = load()
+            val loaded = load()
+            val place = drill
+            rows = loaded
             depth = when {
-                drill == null -> 0
-                drill?.inSection == true -> 2
+                place == null -> 0
+                place.inSection -> 2
                 else -> 1
             }
+            view = GuideView(
+                key = "$section/$depth/${place?.id}/${place?.section}",
+                section = section,
+                depth = depth,
+                title = place?.label ?: heading,
+                rows = loaded,
+                filtering = query.trim().length >= 2,
+            )
             loading = false
         }
     }
