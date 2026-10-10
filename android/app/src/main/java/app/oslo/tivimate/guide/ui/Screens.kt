@@ -441,6 +441,7 @@ private fun GuideScreen(model: GuideViewModel) {
                         Section.Movies -> "Movies"
                         Section.Series -> "TV Shows"
                         Section.All -> "All"
+                        Section.Favorites -> "Favorites"
                     },
                     color = if (selected) Ink else Foam,
                     fontSize = 13.sp,

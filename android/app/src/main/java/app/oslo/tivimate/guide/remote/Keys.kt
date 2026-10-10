@@ -17,6 +17,7 @@ internal object Keys {
     const val MEDIA_FAST_FORWARD = 90
     const val MEDIA_PLAY = 126
     const val MEDIA_PAUSE = 127
+    const val MEDIA_PLAY_PAUSE = 85
     const val VOLUME_MUTE = 164
     const val CHANNEL_UP = 166
     const val CHANNEL_DOWN = 167
