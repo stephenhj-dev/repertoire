@@ -507,6 +507,7 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
                     syncStep = friendlyStep(step)
                 }
                 meta.edit().putBoolean("iconsFetched", true).putBoolean("tmdbFieldsFetched", true).apply()
+                app.oslo.repertoire.tmdb.Tmdb.invalidateLibrary()
                 reload()
                 loadCounts()
                 if (searchText.isNotBlank()) runSearch()
