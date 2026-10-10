@@ -9,11 +9,11 @@ plugins {
 }
 
 android {
-    namespace = "app.oslo.tivimate.guide"
+    namespace = "app.oslo.repertoire"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "app.oslo.tivimate.guide"
+        applicationId = "app.oslo.repertoire"
         minSdk = 26
         targetSdk = 35
         versionCode = 1

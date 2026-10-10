@@ -9,7 +9,7 @@ cd android
 ./gradlew test assembleDebug
 ```
 
-The debug APK is `android/app/build/outputs/apk/debug/app-debug.apk`.
+The debug APK is `android/app/build/outputs/apk/debug/app-debug.apk`. The application ID is `app.oslo.repertoire` (builds before the rename used `app.oslo.tivimate.guide` and install as a separate app).
 
 ```bash
 adb install -r android/app/build/outputs/apk/debug/app-debug.apk
