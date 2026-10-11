@@ -49,7 +49,7 @@ import coil3.compose.AsyncImagePainter
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 
-/** Poster with a monogram placeholder, 2:3 by default. */
+/** Poster with a shimmer while loading and a monogram card without art, 2:3 by default. */
 @Composable
 fun PosterImage(
     url: String?,
@@ -59,24 +59,7 @@ fun PosterImage(
     height: Dp = 72.dp,
     corner: Dp = 10.dp,
 ) {
-    var loaded by remember(url) { mutableStateOf(false) }
-    Box(
-        modifier.size(width, height).clip(RoundedCornerShape(corner)).background(MaterialTheme.colorScheme.surfaceContainerHighest),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (!loaded) {
-            Text(monogram(title), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-        }
-        if (!url.isNullOrBlank()) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current).data(url).crossfade(true).build(),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                onState = { loaded = it is AsyncImagePainter.State.Success },
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
-    }
+    app.oslo.repertoire.ui.components.PosterArt(url, title, modifier.size(width, height), RoundedCornerShape(corner))
 }
 
 /** Round profile photo with a person icon until (or instead of) the image. */

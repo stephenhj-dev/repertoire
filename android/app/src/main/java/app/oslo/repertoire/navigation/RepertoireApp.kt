@@ -78,6 +78,19 @@ import app.oslo.repertoire.ui.setup.SetupPortalScreen
 import app.oslo.repertoire.ui.setup.SetupTvScreen
 import app.oslo.repertoire.ui.setup.SetupWelcomeScreen
 import kotlinx.coroutines.flow.collectLatest
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.border
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import app.oslo.repertoire.ui.components.LocalGlass
+import app.oslo.repertoire.ui.components.glass
+import app.oslo.repertoire.ui.components.glassSource
+import app.oslo.repertoire.ui.components.rememberHaptics
+import app.oslo.repertoire.ui.theme.Motion
+import dev.chrisbanes.haze.HazeState
 
 private const val DURATION = 300
 
@@ -129,20 +142,39 @@ fun RepertoireApp(model: GuideViewModel) {
         )
     }
 
+    val glass = remember { HazeState() }
+    val haptics = rememberHaptics()
+    CompositionLocalProvider(LocalGlass provides glass) {
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
+            val hairline = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
             AnimatedVisibility(
                 visible = topLevel != null,
                 enter = slideInVertically { it } + fadeIn(),
                 exit = slideOutVertically { it } + fadeOut(),
             ) {
-                NavigationBar {
+                // Frosted bar: the page scrolls on underneath it.
+                NavigationBar(
+                    modifier = Modifier
+                        .glass()
+                        .drawBehind { drawLine(hairline, androidx.compose.ui.geometry.Offset(0f, 0f), androidx.compose.ui.geometry.Offset(size.width, 0f), 1f) },
+                    containerColor = Color.Transparent,
+                    tonalElevation = 0.dp,
+                ) {
                     TopLevel.entries.forEach { tab ->
                         val selected = tab == topLevel
                         NavigationBarItem(
                             selected = selected,
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            ),
                             onClick = {
+                                haptics.tap()
                                 if (selected) {
                                     if (tab == TopLevel.Guide) model.backToRoot()
                                 } else {
@@ -164,15 +196,15 @@ fun RepertoireApp(model: GuideViewModel) {
         // Screens draw their own top bars under the status bar; only the bottom bar is inset here.
         val bottom = PaddingValues(bottom = padding.calculateBottomPadding() + if (model.queue != null) UP_NEXT_HEIGHT else 0.dp)
         Box(Modifier.fillMaxSize()) {
-            SharedTransitionLayout {
+            SharedTransitionLayout(Modifier.fillMaxSize().glassSource(glass)) {
                 CompositionLocalProvider(LocalSharedTransitionScope provides this) {
                     NavHost(
                         navController = nav,
                         startDestination = if (model.setupNeeded) SetupGraph else MainGraph,
                         modifier = Modifier.fillMaxSize(),
-                        enterTransition = { fadeIn(tween(DURATION)) + scaleIn(tween(DURATION), initialScale = 0.98f) },
+                        enterTransition = { fadeIn(Motion.fade) + scaleIn(Motion.gentle(), initialScale = 0.985f) },
                         exitTransition = { fadeOut(tween(DURATION / 2)) },
-                        popEnterTransition = { fadeIn(tween(DURATION)) },
+                        popEnterTransition = { fadeIn(Motion.fade) + scaleIn(Motion.gentle(), initialScale = 0.985f) },
                         popExitTransition = { fadeOut(tween(DURATION / 2)) },
                     ) {
                         mainGraph(model, nav, tv, bottom)
@@ -191,13 +223,14 @@ fun RepertoireApp(model: GuideViewModel) {
             TuneCard(model, Modifier.align(Alignment.BottomCenter).padding(bottom = padding.calculateBottomPadding() + 12.dp))
         }
     }
+    }
 }
 
 private fun slideIn(scope: AnimatedContentTransitionScope<*>) =
-    scope.slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(DURATION)) { it / 3 } + fadeIn(tween(DURATION))
+    scope.slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start, Motion.pageOffset) { it / 4 } + fadeIn(Motion.fade)
 
 private fun slideOut(scope: AnimatedContentTransitionScope<*>) =
-    scope.slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(DURATION)) { it / 3 } + fadeOut(tween(DURATION / 2))
+    scope.slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, Motion.pageOffset) { it / 4 } + fadeOut(tween(DURATION / 2))
 
 /** Registers a destination and exposes its AnimatedContentScope for shared elements. */
 private inline fun <reified T : Any> NavGraphBuilder.screen(
@@ -207,8 +240,8 @@ private inline fun <reified T : Any> NavGraphBuilder.screen(
     if (pushed) {
         composable<T>(
             enterTransition = { slideIn(this) },
-            exitTransition = { fadeOut(tween(DURATION / 2)) },
-            popEnterTransition = { fadeIn(tween(DURATION)) },
+            exitTransition = { fadeOut(tween(DURATION)) + scaleOut(Motion.gentle(), targetScale = 0.97f) },
+            popEnterTransition = { fadeIn(Motion.fade) + scaleIn(Motion.gentle(), initialScale = 0.97f) },
             popExitTransition = { slideOut(this) },
         ) { entry -> CompositionLocalProvider(LocalNavAnimatedScope provides this) { content(entry) } }
     } else {
@@ -333,7 +366,7 @@ private fun UpNextBar(model: GuideViewModel, modifier: Modifier = Modifier) {
         exit = slideOutVertically { it / 2 } + fadeOut(),
     ) {
         val shown = queue ?: return@AnimatedVisibility
-        ElevatedCard(Modifier.fillMaxWidth().padding(horizontal = 12.dp).semantics { liveRegion = LiveRegionMode.Polite }) {
+        GlassCard(Modifier.fillMaxWidth().padding(horizontal = 12.dp).semantics { liveRegion = LiveRegionMode.Polite }) {
             Row(Modifier.padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 androidx.compose.foundation.layout.Column(Modifier.weight(1f)) {
                     Text(
@@ -364,6 +397,19 @@ private fun UpNextBar(model: GuideViewModel, modifier: Modifier = Modifier) {
     }
 }
 
+/** Floating frosted card (Up next, tuning), with a hairline edge and soft shadow for depth. */
+@Composable
+private fun GlassCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp)
+    androidx.compose.foundation.layout.Box(
+        modifier
+            .shadow(18.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
+            .clip(shape)
+            .glass()
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f), shape),
+    ) { content() }
+}
+
 /** Progress while a title is being tuned on the TV. */
 @Composable
 private fun TuneCard(model: GuideViewModel, modifier: Modifier = Modifier) {
@@ -375,7 +421,7 @@ private fun TuneCard(model: GuideViewModel, modifier: Modifier = Modifier) {
         exit = slideOutVertically { it / 2 } + fadeOut(),
     ) {
         val shown = tune ?: return@AnimatedVisibility
-        ElevatedCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp).semantics { liveRegion = LiveRegionMode.Polite }) {
+        GlassCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp).semantics { liveRegion = LiveRegionMode.Polite }) {
             Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 3.dp)
                 Spacer(Modifier.width(16.dp))

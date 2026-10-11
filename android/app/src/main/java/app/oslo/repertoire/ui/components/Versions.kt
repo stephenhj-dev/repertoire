@@ -72,6 +72,7 @@ fun PlayButton(
     onLongPress: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
+    val haptics = rememberHaptics()
     Box(modifier.size(48.dp), contentAlignment = Alignment.Center) {
         if (tuning) {
             CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.5.dp)
@@ -79,8 +80,8 @@ fun PlayButton(
         }
         Surface(
             shape = CircleShape,
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+            contentColor = MaterialTheme.colorScheme.primary,
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
@@ -89,8 +90,8 @@ fun PlayButton(
                     role = Role.Button,
                     onClickLabel = label,
                     onLongClickLabel = if (onLongPress != null) "Choose version" else null,
-                    onLongClick = onLongPress,
-                    onClick = onPlay,
+                    onLongClick = onLongPress?.let { { haptics.hold(); it() } },
+                    onClick = { haptics.confirm(); onPlay() },
                 )
                 .semantics {
                     contentDescription = label

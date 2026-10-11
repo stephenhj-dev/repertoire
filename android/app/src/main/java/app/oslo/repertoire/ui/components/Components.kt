@@ -37,6 +37,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -63,6 +65,10 @@ fun ChannelLogo(
     width: Dp = 48.dp,
     height: Dp = 48.dp,
 ) {
+    if (height > width) {
+        PosterArt(url, title, modifier.size(width, height).clearAndSetSemantics { }, RoundedCornerShape(8.dp))
+        return
+    }
     var loaded by remember(url) { mutableStateOf(false) }
     val shape = RoundedCornerShape(12.dp)
     Box(
@@ -121,15 +127,23 @@ fun IconBadge(icon: ImageVector, modifier: Modifier = Modifier) {
 
 @Composable
 fun SectionHeader(text: String, modifier: Modifier = Modifier) {
-    Text(
-        text,
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = modifier
+    // Quiet, tracked-out uppercase label with a short amber rule, film-journal style.
+    Row(
+        modifier
             .fillMaxWidth()
-            .padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 6.dp)
-            .semantics { heading() },
-    )
+            .padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 10.dp)
+            .semantics(mergeDescendants = true) { heading() },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(width = 14.dp, height = 2.dp).background(MaterialTheme.colorScheme.primary))
+        Spacer(Modifier.width(10.dp))
+        Text(
+            text.uppercase(),
+            style = app.oslo.repertoire.ui.theme.OverlineStyle,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+        )
+    }
 }
 
 /** Centered illustration-style message with an optional action. */
@@ -148,14 +162,9 @@ fun EmptyState(
         modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 40.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(
-            Modifier.size(88.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
-        }
-        Spacer(Modifier.height(20.dp))
-        Text(title, style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
+        PosterStackIllustration(icon)
+        Spacer(Modifier.height(24.dp))
+        Text(title, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
         Spacer(Modifier.height(8.dp))
         Text(
             body,
@@ -169,6 +178,41 @@ fun EmptyState(
         }
         if (secondary != null) {
             TextButton(onClick = onSecondary) { Text(secondary) }
+        }
+    }
+}
+
+/**
+ * Three fanned-out blank one-sheets with a soft amber glow and the icon on the front one:
+ * the empty-state illustration, drawn rather than shipped as artwork.
+ */
+@Composable
+private fun PosterStackIllustration(icon: ImageVector) {
+    val colors = MaterialTheme.colorScheme
+    val amber = colors.primary
+    Box(Modifier.size(width = 168.dp, height = 132.dp), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier.size(168.dp, 132.dp).drawBehind {
+                drawCircle(Brush.radialGradient(listOf(amber.copy(alpha = 0.18f), Color.Transparent)), radius = size.width / 2f)
+            },
+        )
+        listOf(-14f to -34.dp, 12f to 34.dp).forEach { (angle, dx) ->
+            Box(
+                Modifier
+                    .graphicsLayer { rotationZ = angle; translationX = dx.toPx(); translationY = 6.dp.toPx() }
+                    .size(64.dp, 96.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Brush.verticalGradient(listOf(colors.surfaceContainerHighest, colors.surfaceContainerHigh))),
+            )
+        }
+        Box(
+            Modifier
+                .size(72.dp, 108.dp)
+                .clip(RoundedCornerShape(9.dp))
+                .background(Brush.verticalGradient(listOf(colors.primaryContainer, colors.surfaceContainerHighest))),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(34.dp), tint = colors.onPrimaryContainer)
         }
     }
 }
@@ -222,27 +266,19 @@ fun MessageCard(
 /** Shimmering placeholder rows shown while a list loads. */
 @Composable
 fun SkeletonList(modifier: Modifier = Modifier, rows: Int = 8, poster: Boolean = false) {
-    val pulse by rememberInfiniteTransition(label = "skeleton").animateFloat(
-        initialValue = 0.45f,
-        targetValue = 0.9f,
-        animationSpec = infiniteRepeatable(tween(800), RepeatMode.Reverse),
-        label = "alpha",
-    )
-    val block = MaterialTheme.colorScheme.surfaceContainerHighest
     Column(
         modifier
             .fillMaxWidth()
-            .graphicsLayer { alpha = pulse }
             .semantics { contentDescription = "Loading" },
     ) {
         repeat(rows) { index ->
             Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(48.dp, if (poster) 64.dp else 48.dp).clip(RoundedCornerShape(12.dp)).background(block))
+                Box(Modifier.size(48.dp, if (poster) 72.dp else 48.dp).clip(RoundedCornerShape(if (poster) 8.dp else 12.dp)).posterShimmer())
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
-                    Box(Modifier.fillMaxWidth(if (index % 3 == 0) 0.7f else 0.5f).height(14.dp).clip(CircleShape).background(block))
+                    Box(Modifier.fillMaxWidth(if (index % 3 == 0) 0.7f else 0.5f).height(14.dp).clip(CircleShape).posterShimmer())
                     Spacer(Modifier.height(8.dp))
-                    Box(Modifier.fillMaxWidth(0.3f).height(10.dp).clip(CircleShape).background(block))
+                    Box(Modifier.fillMaxWidth(0.3f).height(10.dp).clip(CircleShape).posterShimmer())
                 }
             }
         }

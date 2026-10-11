@@ -137,7 +137,8 @@ fun TitleListItem(
         },
         trailingContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onFavorite) {
+                val haptics = app.oslo.repertoire.ui.components.rememberHaptics()
+                IconButton(onClick = { haptics.tap(); onFavorite() }) {
                     Icon(
                         if (favorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
                         contentDescription = if (favorite) "Remove from favorites" else "Add to favorites",
