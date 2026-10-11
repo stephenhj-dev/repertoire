@@ -1,5 +1,7 @@
 package app.oslo.repertoire.ui.settings
 
+import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material.icons.rounded.TextFields
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -236,6 +238,17 @@ fun SettingsScreen(
                 }
             }
 
+            item {
+                ListItem(
+                    headlineContent = { Text("Posters for movies and series") },
+                    supportingContent = { Text("Show them as a poster grid in the Guide and Search, or as rows") },
+                    leadingContent = { Icon(Icons.Rounded.GridView, contentDescription = null) },
+                    trailingContent = { Switch(checked = model.posterGrid, onCheckedChange = null) },
+                    modifier = Modifier.clickable(role = Role.Switch) { model.showPosterGrid(!model.posterGrid) },
+                    colors = itemColors,
+                )
+            }
+
             item { SectionHeader("About") }
             item {
                 ListItem(
@@ -257,6 +270,14 @@ fun SettingsScreen(
                         Text("${context.getString(R.string.app_tagline)}. Video plays on the TV; this phone is the guide and the remote.")
                     },
                     leadingContent = { Icon(Icons.Rounded.Info, contentDescription = null) },
+                    colors = itemColors,
+                )
+            }
+            item {
+                ListItem(
+                    headlineContent = { Text("Typefaces") },
+                    supportingContent = { Text("Fraunces and Inter, both under the SIL Open Font License 1.1") },
+                    leadingContent = { Icon(Icons.Rounded.TextFields, contentDescription = null) },
                     colors = itemColors,
                 )
             }
