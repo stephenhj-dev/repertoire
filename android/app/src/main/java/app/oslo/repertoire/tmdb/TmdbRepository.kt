@@ -7,7 +7,10 @@ import app.oslo.repertoire.data.PortalStore
 import app.oslo.repertoire.data.TitleRow
 import app.oslo.repertoire.data.XtreamInfo
 import java.io.File
-import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -20,6 +23,7 @@ object Tmdb {
 
     @Volatile private var client: TmdbClient? = null
     private val indexLock = Mutex()
+    private val portalScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     @Volatile private var index: LibraryIndex? = null
 
     private fun client(context: Context): TmdbClient = client ?: synchronized(this) {
@@ -84,13 +88,11 @@ object Tmdb {
         var year = row.year
         val login = PortalStore(context).load()
         if (login != null) {
-            val info = try {
-                withContext(Dispatchers.IO) { XtreamInfo.lookup(login.url, login.username, login.password, row.kind, row.remoteId) }
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: Exception) {
-                null
+            // Portals can be slow; don't hold the page for more than a few seconds.
+            val lookup = portalScope.async {
+                runCatching { XtreamInfo.lookup(login.url, login.username, login.password, row.kind, row.remoteId) }.getOrNull()
             }
+            val info = withTimeoutOrNull(6_000) { lookup.await() }
             info?.tmdbId?.let { id ->
                 CatalogDatabase.get(context).catalog().setTmdbId(row.id, id)
                 return id
