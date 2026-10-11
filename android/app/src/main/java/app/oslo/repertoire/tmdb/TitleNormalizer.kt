@@ -14,7 +14,7 @@ object TitleNormalizer {
     private val maxYear = Calendar.getInstance().get(Calendar.YEAR) + 2
 
     /** Bracketed or piped prefixes and tags: "[EN]", "|NF|", "(MULTI)", "{4K}". */
-    private val BRACKET_PREFIX = Regex("""^\s*(\[[^\]]{1,20}]|\|[^|]{1,20}\||\{[^}]{1,20}}|★+)\s*[-:|]?\s*""")
+    private val BRACKET_PREFIX = Regex("""^\s*(\[[^\]]{1,20}\]|\|[^|]{1,20}\||\{[^}]{1,20}\}|★+)\s*[-:|]?\s*""")
 
     /** "EN - ", "4K-NF : ", "FR| ", "MULTI - ": a short upper-case code then a separator. */
     private val CODE_PREFIX = Regex("""^\s*([A-Z0-9][A-Z0-9+&]{0,5}(?:[ /-][A-Z0-9+&]{1,5}){0,2})\s*(?:-|:|\||•|»)\s+""")
