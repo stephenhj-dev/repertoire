@@ -22,8 +22,8 @@ fun Modifier.glassSource(state: HazeState): Modifier = hazeSource(state)
  * Android 12+; a denser translucent tint on older versions, where blur isn't available).
  */
 @Composable
-fun Modifier.glass(strength: Float = 1f): Modifier {
-    val state = LocalGlass.current
+fun Modifier.glass(strength: Float = 1f, source: HazeState? = null): Modifier {
+    val state = source ?: LocalGlass.current
     val surface = MaterialTheme.colorScheme.surface
     if (state == null) return this
     val style = HazeStyle(

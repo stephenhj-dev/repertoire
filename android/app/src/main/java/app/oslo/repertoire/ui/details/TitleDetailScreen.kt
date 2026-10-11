@@ -1,5 +1,10 @@
 package app.oslo.repertoire.ui.details
 
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.HazeState
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.foundation.lazy.rememberLazyListState
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
@@ -117,10 +122,19 @@ fun TitleDetailScreen(
         AddToWatchlistSheet(model, ref, onDismiss = { saving = false })
     }
 
+    val listState = rememberLazyListState()
+    val pageGlass = remember { HazeState() }
+    val solid by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 640 } }
+    val scrolled = { if (listState.firstVisibleItemIndex == 0) listState.firstVisibleItemScrollOffset.toFloat() else 2000f }
     Box(Modifier.fillMaxSize()) {
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 32.dp + if (model.queue != null) 88.dp else 0.dp)) {
+      Box(Modifier.fillMaxSize().hazeSource(pageGlass)) {
+        BackdropAura(
+            TmdbImages.backdrop(detail?.backdropPath),
+            Modifier.graphicsLayer { translationY = -scrolled() * 0.6f },
+        )
+        LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = 32.dp + if (model.queue != null) 88.dp else 0.dp)) {
             item(key = "header") {
-                Header(route, detail, title, parsed.year)
+                Header(route, detail, title, parsed.year, scrolled)
             }
             if (detail != null && detail.genres.isNotEmpty()) {
                 item(key = "genres") {
@@ -175,22 +189,16 @@ fun TitleDetailScreen(
                 item(key = "footnote") { TmdbFootnote() }
             }
         }
-        // Back button over the backdrop.
-        FilledTonalIconButton(
-            onClick = onBack,
-            modifier = Modifier.statusBarsPadding().padding(8.dp),
-            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                containerColor = Color.Black.copy(alpha = 0.35f),
-                contentColor = Color.White,
-            ),
-        ) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") }
+      }
+        // Round back button over the artwork; frosts into a titled bar once the hero scrolls away.
+        HeroTopBar(title, solid, onBack, pageGlass)
     }
 }
 
 @Composable
-private fun Header(route: TitleDetailRoute, detail: TmdbTitleDetail?, title: String, fallbackYear: Int?) {
-    Box(Modifier.fillMaxWidth().height(360.dp)) {
-        BackdropImage(TmdbImages.backdrop(detail?.backdropPath), Modifier.fillMaxWidth().height(260.dp))
+private fun Header(route: TitleDetailRoute, detail: TmdbTitleDetail?, title: String, fallbackYear: Int?, scrolled: () -> Float) {
+    Box(Modifier.fillMaxWidth().height(430.dp)) {
+        BackdropImage(TmdbImages.backdrop(detail?.backdropPath), Modifier.fillMaxWidth().height(340.dp), scrolled)
         Row(
             Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = 20.dp),
             verticalAlignment = Alignment.Bottom,
@@ -199,18 +207,18 @@ private fun Header(route: TitleDetailRoute, detail: TmdbTitleDetail?, title: Str
             PosterImage(
                 url = poster,
                 title = title,
-                width = 120.dp,
-                height = 180.dp,
-                corner = 14.dp,
+                width = 124.dp,
+                height = 186.dp,
+                corner = 12.dp,
                 modifier = Modifier
-                    .shadow(12.dp, MaterialTheme.shapes.medium)
+                    .shadow(24.dp, androidx.compose.foundation.shape.RoundedCornerShape(12.dp), ambientColor = Color.Black, spotColor = Color.Black)
                     .then(if (route.catalogId > 0) Modifier.sharedElement("art-${route.kind}-${route.catalogId}") else Modifier),
             )
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f).padding(bottom = 4.dp)) {
                 Text(
                     title,
-                    style = MaterialTheme.typography.headlineSmall,
+                    style = MaterialTheme.typography.headlineMedium,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.semantics { heading() },

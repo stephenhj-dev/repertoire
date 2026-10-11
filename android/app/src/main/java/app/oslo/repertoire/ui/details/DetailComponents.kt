@@ -1,5 +1,14 @@
 package app.oslo.repertoire.ui.details
 
+import app.oslo.repertoire.ui.components.glass
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -85,35 +94,97 @@ fun ProfileImage(url: String?, modifier: Modifier = Modifier, size: Dp = 72.dp) 
     }
 }
 
-/** Full-bleed backdrop that fades into the surface below. */
+/**
+ * Full-bleed backdrop for the top of a title or person page. It drifts at half the scroll speed
+ * ([scrolled] is the header's scroll offset in px) and its lower half dissolves into whatever is
+ * behind it, normally [BackdropAura], so the artwork melts into the page.
+ */
 @Composable
-fun BackdropImage(url: String?, modifier: Modifier = Modifier) {
-    val surface = MaterialTheme.colorScheme.surface
-    Box(modifier) {
+fun BackdropImage(url: String?, modifier: Modifier = Modifier, scrolled: () -> Float = { 0f }) {
+    val colors = MaterialTheme.colorScheme
+    Box(
+        modifier
+            .graphicsLayer {
+                translationY = scrolled() * 0.45f
+                compositingStrategy = CompositingStrategy.Offscreen
+            }
+            .drawWithContent {
+                drawContent()
+                drawRect(
+                    Brush.verticalGradient(0f to Color.Black, 0.5f to Color.Black, 1f to Color.Transparent),
+                    blendMode = BlendMode.DstIn,
+                )
+            },
+    ) {
         if (!url.isNullOrBlank()) {
             AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current).data(url).crossfade(true).build(),
+                model = ImageRequest.Builder(LocalContext.current).data(url).build(),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
-            Box(
-                Modifier.fillMaxSize().background(
-                    Brush.linearGradient(listOf(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.surfaceContainerHigh)),
+            Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(colors.primaryContainer, colors.surfaceContainerHigh))))
+        }
+        // Keeps the status bar and back button legible on bright art.
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.5f), 0.35f to Color.Transparent)))
+    }
+}
+
+/**
+ * The page's ambient light: the backdrop again, heavily blurred (Android 12+) and faded into the
+ * surface, behind everything, so the colours of the artwork carry down the page.
+ */
+@Composable
+fun BackdropAura(url: String?, modifier: Modifier = Modifier, height: Dp = 640.dp) {
+    if (url.isNullOrBlank()) return
+    val surface = MaterialTheme.colorScheme.surface
+    val blurs = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
+    Box(modifier.fillMaxWidth().height(height)) {
+        AsyncImage(
+            model = ImageRequest.Builder(LocalContext.current).data(url).build(),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { alpha = if (blurs) 0.55f else 0.22f }
+                .then(if (blurs) Modifier.blur(72.dp, BlurredEdgeTreatment.Rectangle) else Modifier),
+        )
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to surface.copy(alpha = 0.15f), 0.55f to surface.copy(alpha = 0.6f), 1f to surface)))
+    }
+}
+
+/**
+ * Top bar that frosts in once the hero has scrolled away: back button, and the page title in
+ * the display serif. Before that, only the round back button floats over the artwork.
+ */
+@Composable
+fun HeroTopBar(title: String, solid: Boolean, onBack: () -> Unit, source: dev.chrisbanes.haze.HazeState?, modifier: Modifier = Modifier) {
+    val shown by androidx.compose.animation.core.animateFloatAsState(if (solid) 1f else 0f, app.oslo.repertoire.ui.theme.Motion.gentle(), label = "bar")
+    Box(modifier.fillMaxWidth()) {
+        Box(
+            Modifier
+                .matchParentSize()
+                .graphicsLayer { alpha = shown }
+                .then(if (shown > 0.01f) Modifier.glass(source = source) else Modifier),
+        )
+        Row(Modifier.statusBarsPadding().padding(horizontal = 8.dp, vertical = 6.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            androidx.compose.material3.FilledTonalIconButton(
+                onClick = onBack,
+                colors = androidx.compose.material3.IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = Color.Black.copy(alpha = 0.35f * (1f - shown)),
+                    contentColor = androidx.compose.ui.graphics.lerp(Color.White, MaterialTheme.colorScheme.onSurface, shown),
                 ),
+            ) { Icon(androidx.compose.material.icons.Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") }
+            Spacer(Modifier.width(8.dp))
+            Text(
+                title,
+                style = MaterialTheme.typography.titleLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).graphicsLayer { alpha = shown; translationY = (1f - shown) * 12f },
             )
         }
-        Box(
-            Modifier.fillMaxSize().background(
-                Brush.verticalGradient(
-                    0f to Color.Black.copy(alpha = 0.45f),
-                    0.3f to Color.Transparent,
-                    0.65f to surface.copy(alpha = 0.6f),
-                    1f to surface,
-                ),
-            ),
-        )
     }
 }
 

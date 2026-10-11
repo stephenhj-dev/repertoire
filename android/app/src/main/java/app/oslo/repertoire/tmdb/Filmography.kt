@@ -39,6 +39,25 @@ object Filmography {
      * and merges duplicates (the same title credited several times) into one entry per group.
      * Each group is sorted oldest first.
      */
+    /**
+     * Backdrop for a person's page: from their most-voted film in their own department (acting
+     * for actors, directing for directors), falling back to any credit; series and "Self"
+     * appearances only when there is nothing else.
+     */
+    fun heroBackdrop(credits: TmdbCombinedCredits, department: String?): String? {
+        val own = when (department) {
+            null, "Acting" -> credits.cast
+            "Directing" -> credits.crew.filter { it.job.orEmpty() in DIRECTOR_JOBS }
+            else -> credits.crew.filter { it.department == department }
+        }
+        fun best(list: List<TmdbCredit>) = list
+            .filter { !it.backdropPath.isNullOrBlank() && !it.adult }
+            .filterNot { it.mediaType == "tv" && (TALK in it.genreIds || NEWS in it.genreIds || it.character?.let(SELF::containsMatchIn) == true) }
+            .sortedWith(compareBy<TmdbCredit> { it.mediaType != "movie" }.thenByDescending { it.voteCount })
+            .firstOrNull()?.backdropPath
+        return best(own) ?: best(credits.cast + credits.crew)
+    }
+
     fun build(credits: TmdbCombinedCredits): Map<CreditGroup, List<FilmCredit>> {
         val grouped = linkedMapOf<CreditGroup, MutableList<Pair<TmdbCredit, String>>>()
         for (credit in credits.cast) {

@@ -1,5 +1,11 @@
 package app.oslo.repertoire.ui.details
 
+import dev.chrisbanes.haze.hazeSource
+import app.oslo.repertoire.tmdb.Filmography
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -106,25 +112,32 @@ fun PersonScreen(
 ) {
     val state = page.state
     val person = state.person
-    val scroll = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
-    Column(Modifier.fillMaxSize().nestedScroll(scroll.nestedScrollConnection)) {
-        TopAppBar(
-            title = { Text(person?.name ?: page.route.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-            navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
-            scrollBehavior = scroll,
-        )
-        when {
-            state.error != null && person == null -> MessageCard(
-                state.error,
-                Modifier.padding(16.dp),
-                action = "Retry",
-                onAction = page::load,
-            )
-            person == null -> SkeletonList(rows = 6, poster = true)
-            else -> PersonContent(model, page, person, onTitle, onOpenList)
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val pageGlass = remember { dev.chrisbanes.haze.HazeState() }
+    val solid by remember { androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 560 } }
+    val scrolled = { if (listState.firstVisibleItemIndex == 0) listState.firstVisibleItemScrollOffset.toFloat() else 2000f }
+    val backdrop = remember(person) {
+        person?.combinedCredits?.let { Filmography.heroBackdrop(it, person.knownForDepartment) }?.let(TmdbImages::backdrop)
+    }
+    Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().then(Modifier.hazeSourceCompat(pageGlass))) {
+            BackdropAura(backdrop, Modifier.graphicsLayer { translationY = -scrolled() * 0.6f })
+            when {
+                state.error != null && person == null -> MessageCard(
+                    state.error,
+                    Modifier.statusBarsPadding().padding(top = 64.dp, start = 16.dp, end = 16.dp),
+                    action = "Retry",
+                    onAction = page::load,
+                )
+                person == null -> SkeletonList(Modifier.statusBarsPadding().padding(top = 64.dp), rows = 6, poster = true)
+                else -> PersonContent(model, page, person, onTitle, onOpenList, listState, backdrop, scrolled)
+            }
         }
+        HeroTopBar(person?.name ?: page.route.name, solid || person == null, onBack, pageGlass)
     }
 }
+
+private fun Modifier.hazeSourceCompat(state: dev.chrisbanes.haze.HazeState): Modifier = hazeSource(state)
 
 @Composable
 private fun PersonContent(
@@ -133,14 +146,17 @@ private fun PersonContent(
     person: TmdbPerson,
     onTitle: (TitleDetailRoute) -> Unit,
     onOpenList: (Long) -> Unit,
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    backdrop: String?,
+    scrolled: () -> Float,
 ) {
     val state = page.state
     val group = page.group
     val visible = page.visible
     val inGroup = state.groups[group].orEmpty()
     val owned = inGroup.count { it.inLibrary }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 32.dp)) {
-        item(key = "header") { PersonHeader(person) }
+    LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = 32.dp)) {
+        item(key = "header") { PersonHeader(person, backdrop, scrolled) }
         val bio = person.biography?.takeIf { it.isNotBlank() }
         if (bio != null) {
             item(key = "bio") { ExpandableText(bio, Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) }
@@ -251,28 +267,43 @@ private fun PlayAllRow(model: GuideViewModel, page: PersonViewModel, person: Tmd
 }
 
 @Composable
-private fun PersonHeader(person: TmdbPerson) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        ProfileImage(TmdbImages.profile(person.profilePath), size = 112.dp)
-        Spacer(Modifier.width(20.dp))
-        Column(Modifier.weight(1f)) {
-            Text(person.name, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
-            person.knownForDepartment?.let {
-                Text(
-                    if (it == "Acting") "Actor" else if (it == "Directing") "Director" else it,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
+private fun PersonHeader(person: TmdbPerson, backdrop: String?, scrolled: () -> Float) {
+    Box(Modifier.fillMaxWidth().height(400.dp)) {
+        BackdropImage(backdrop, Modifier.fillMaxWidth().height(300.dp), scrolled)
+        Row(
+            Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = 20.dp),
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            // Portrait with a thin amber ring, lifted off the backdrop.
+            Box(
+                Modifier
+                    .shadow(20.dp, androidx.compose.foundation.shape.CircleShape, ambientColor = Color.Black, spotColor = Color.Black)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.85f), androidx.compose.foundation.shape.CircleShape)
+                    .padding(2.dp),
+            ) {
+                ProfileImage(TmdbImages.profile(person.profilePath), size = 116.dp)
             }
-            val born = TitleNormalizer.yearOf(person.birthday)
-            val died = TitleNormalizer.yearOf(person.deathday)
-            val life = when {
-                born != null && died != null -> "$born–$died"
-                born != null -> "Born $born"
-                else -> null
-            }
-            listOfNotNull(life, person.placeOfBirth?.takeIf { it.isNotBlank() }).forEach {
-                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.width(18.dp))
+            Column(Modifier.weight(1f).padding(bottom = 6.dp)) {
+                person.knownForDepartment?.let {
+                    Text(
+                        (if (it == "Acting") "Actor" else if (it == "Directing") "Director" else it).uppercase(),
+                        style = app.oslo.repertoire.ui.theme.OverlineStyle,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                }
+                Text(person.name, style = MaterialTheme.typography.headlineMedium, modifier = Modifier.semantics { heading() })
+                val born = TitleNormalizer.yearOf(person.birthday)
+                val died = TitleNormalizer.yearOf(person.deathday)
+                val life = when {
+                    born != null && died != null -> "$born–$died"
+                    born != null -> "Born $born"
+                    else -> null
+                }
+                listOfNotNull(life, person.placeOfBirth?.takeIf { it.isNotBlank() }).forEach {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
             }
         }
     }
