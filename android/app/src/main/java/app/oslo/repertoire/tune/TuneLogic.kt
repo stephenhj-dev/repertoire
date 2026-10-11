@@ -14,7 +14,10 @@ data class UiNode(
     val description: String = "",
     val checkable: Boolean = false,
     val checked: Boolean = false,
+    val resourceId: String = "",
 ) {
+    fun contains(other: UiNode): Boolean =
+        other.centerX in left..right && other.centerY in top..bottom
     /** Text, or the content description when there is no text. */
     val label: String get() = text.ifBlank { description }
     val centerX: Int get() = (left + right) / 2
@@ -45,6 +48,7 @@ fun parseNodes(xml: String): List<UiNode> {
             description = attrs["content-desc"].orEmpty(),
             checkable = attrs["checkable"] == "true",
             checked = attrs["checked"] == "true",
+            resourceId = attrs["resource-id"].orEmpty(),
         )
     }
     return nodes

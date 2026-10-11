@@ -1040,9 +1040,9 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * Audio and subtitle buttons. TiviMate ignores KEYCODE_MEDIA_AUDIO_TRACK and
-     * KEYCODE_CAPTIONS, so this opens its player menu over ADB, picks the Audio track or CC
-     * entry, and mirrors the choices on the phone. Without ADB it opens the player menu with a
-     * long OK press so the user can finish on the TV.
+     * KEYCODE_CAPTIONS (what these buttons used to send), so this opens its player menu over
+     * ADB, opens the audio or CC dialog, and mirrors the choices on the phone. Without ADB it
+     * opens the quick panel with a long OK press so the user can finish on the TV.
      */
     fun openTracks(track: TiviMateScreens.Track) {
         if (tvStore.host.isBlank()) {
@@ -1072,7 +1072,7 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
                         track,
                         busy = false,
                         message = if (fallback) {
-                            "Debugging isn't answering, so the player menu was opened on the TV. Choose ${if (track == TiviMateScreens.Track.Audio) "Audio track" else "CC"} there."
+                            "Debugging isn't answering, so the quick panel was opened on the TV. Press Down there, then pick ${if (track == TiviMateScreens.Track.Audio) "the audio tile (e.g. Stereo)" else "Closed captions"}."
                         } else {
                             error.message ?: "Couldn't reach the TV"
                         },
@@ -1106,11 +1106,7 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
         val sheet = trackSheet
         trackSheet = null
         if (closeOnTv && sheet != null && !sheet.busy && sheet.options.isNotEmpty()) {
-            send {
-                adbRemote.key(tvStore.host, Keys.BACK)
-                delay(300)
-                adbRemote.key(tvStore.host, Keys.BACK)
-            }
+            send { adbRemote.closeTracks(tvStore.host, tivimatePackage) }
         }
     }
 

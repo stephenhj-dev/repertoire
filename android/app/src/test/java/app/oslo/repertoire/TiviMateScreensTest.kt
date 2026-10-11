@@ -47,34 +47,71 @@ class TiviMateScreensTest {
         assertEquals("Season 2", TiviMateScreens.seasonNode(items, 2)!!.text)
     }
 
+    private fun fixture(name: String) =
+        parseNodes(javaClass.classLoader!!.getResource("tivimate/$name")!!.readText())
+
     @Test
-    fun findsPlayerMenuEntriesByTextOrDescription() {
-        val menu = listOf(node("", 900, desc = "Audio track"), node("CC", 900), node("Video tracks", 900), node("Channels list", 900))
-        assertTrue(TiviMateScreens.playerMenuShown(menu))
-        assertEquals("Audio track", TiviMateScreens.trackEntry(menu, Track.Audio)!!.label)
-        assertEquals("CC", TiviMateScreens.trackEntry(menu, Track.Subtitles)!!.label)
-        assertFalse(TiviMateScreens.isTrackEntry("Audio offset delay setting long", Track.Audio))
-        assertTrue(TiviMateScreens.isTrackEntry("Closed captions: Off", Track.Subtitles))
-        assertFalse(TiviMateScreens.isTrackEntry("Audio offset", Track.Audio))
-        assertFalse(TiviMateScreens.isTrackEntry("Subtitle size", Track.Subtitles))
-        assertFalse(TiviMateScreens.playerMenuShown(listOf(node("Search"), node("TV"))))
+    fun readsTheLivePlayerMenuFromAShieldDump() {
+        val items = fixture("player-menu-live.xml")
+        val row = TiviMateScreens.menuRow(items)!!
+        assertEquals("Search", row.tiles[row.focused].text)
+        assertEquals(listOf("Search", "Channels list", "Recordings", "Multiview", "Picture-in-picture", "1280 × 720", "Stereo", "0 ms", "Closed captions 1"), row.tiles.map { it.text })
+        assertEquals(6, TiviMateScreens.trackTile(row, Track.Audio))
+        assertEquals(8, TiviMateScreens.trackTile(row, Track.Subtitles))
+        assertEquals(List(6) { "KEYCODE_DPAD_RIGHT" } + "KEYCODE_DPAD_CENTER", TiviMateScreens.keysTo(row, 6))
     }
 
     @Test
-    fun readsTrackOptionsThatAppeared() {
-        val menu = listOf(node("Audio track", 900), node("CC", 900))
-        val dialog = menu + listOf(
-            node("Audio tracks", 100, clickable = false),
-            node("English (AC3 5.1)", 200, checkable = true, checked = true),
-            node("Deutsch", 260, checkable = true),
-            node("Settings", 320),
-        )
-        val options = TiviMateScreens.trackOptions(menu, dialog, Track.Audio)
-        assertEquals(listOf("English (AC3 5.1)", "Deutsch"), options.map { it.label })
-        assertEquals(listOf(true, false), options.map { it.selected })
-        val subs = listOf(node("Closed captions", 100, clickable = false), node("Off", 200, checked = true), node("English", 260),
-            node("Show closed captions for all channels", 320), node("System settings for closed captions", 380))
-        assertEquals(listOf("Off", "English"), TiviMateScreens.trackOptions(menu, menu + subs, Track.Subtitles).map { it.label })
+    fun otherScreensAreNotTheMenu() {
+        assertNull(TiviMateScreens.menuRow(fixture("playback.xml")))
+        assertNull(TiviMateScreens.menuRow(fixture("tv-guide.xml")))
+        assertTrue(TiviMateScreens.fullscreenPlayback(fixture("playback.xml")))
+        assertFalse(TiviMateScreens.fullscreenPlayback(fixture("tv-guide.xml")))
+        assertNull(TiviMateScreens.trackDialog(fixture("player-menu-live.xml")))
+        assertNull(TiviMateScreens.trackDialog(fixture("quick-panel.xml")))
+    }
+
+    @Test
+    fun findsTracksByNeighboursWhenTilesShowValues() {
+        fun row(vararg labels: String, focused: Int = 0) =
+            TiviMateScreens.MenuRow(labels.mapIndexed { i, l -> node(l, 900).copy(left = i * 200, right = i * 200 + 190) }, focused)
+        assertEquals(1, TiviMateScreens.trackTile(row("1920x1080", "English 5.1", "-40 ms", "Off", "Normal"), Track.Audio))
+        assertEquals(3, TiviMateScreens.trackTile(row("1920x1080", "English 5.1", "-40 ms", "Off", "Normal"), Track.Subtitles))
+        assertEquals(2, TiviMateScreens.trackTile(row("Search", "1920 × 1080", "Deutsch", "Subtitles"), Track.Audio))
+        assertEquals(3, TiviMateScreens.trackTile(row("Search", "1920 × 1080", "Deutsch", "Subtitles"), Track.Subtitles))
+        assertEquals(listOf("KEYCODE_DPAD_LEFT", "KEYCODE_DPAD_CENTER"), TiviMateScreens.keysTo(row("a", "b", "c", focused = 2), 1))
+        assertTrue(TiviMateScreens.isOffset("0 ms"))
+        assertTrue(TiviMateScreens.isOffset("-120 ms"))
+        assertFalse(TiviMateScreens.isOffset("Stereo"))
+        assertTrue(TiviMateScreens.isResolution("1280 × 720"))
+        assertFalse(TiviMateScreens.isResolution("Mix 2x"))
+    }
+
+    @Test
+    fun readsTheAudioDialog() {
+        val dialog = TiviMateScreens.trackDialog(fixture("audio-dialog.xml"))!!
+        assertEquals("Audio tracks", dialog.title)
+        assertEquals(listOf(TiviMateScreens.TrackOption("Off", false), TiviMateScreens.TrackOption("Stereo", true)), TiviMateScreens.trackOptions(dialog))
+        assertEquals(listOf("KEYCODE_DPAD_UP", "KEYCODE_DPAD_CENTER"), TiviMateScreens.keysToOption(dialog, "Off"))
+        assertEquals(listOf("KEYCODE_DPAD_CENTER"), TiviMateScreens.keysToOption(dialog, "Stereo"))
+        assertNull(TiviMateScreens.keysToOption(dialog, "Deutsch"))
+    }
+
+    @Test
+    fun readsTheCaptionsDialogWithoutItsSettings() {
+        val dialog = TiviMateScreens.trackDialog(fixture("cc-dialog.xml"))!!
+        assertEquals("Closed captions", dialog.title)
+        assertEquals(listOf("Off", "Closed captions 1"), dialog.options.map { it.text })
+        assertEquals(1, dialog.focused)
+    }
+
+    @Test
+    fun namedEntries() {
+        assertTrue(TiviMateScreens.isTrackEntry("Closed captions 1", Track.Subtitles))
+        assertTrue(TiviMateScreens.isTrackEntry("Audio track", Track.Audio))
+        assertFalse(TiviMateScreens.isTrackEntry("Audio offset", Track.Audio))
+        assertFalse(TiviMateScreens.isTrackEntry("Subtitle size", Track.Subtitles))
+        assertFalse(TiviMateScreens.isTrackEntry("Stereo", Track.Audio))
     }
 
     @Test

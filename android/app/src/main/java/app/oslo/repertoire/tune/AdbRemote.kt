@@ -46,6 +46,9 @@ class AdbRemote(private val directory: File) {
     suspend fun chooseTrack(host: String, packageName: String, track: TiviMateScreens.Track, label: String): String =
         withContext(Dispatchers.IO) { tuner(host, packageName).chooseTrack(track, label) }
 
+    suspend fun closeTracks(host: String, packageName: String) =
+        withContext(Dispatchers.IO) { tuner(host, packageName).closeTracks() }
+
     private fun tuner(host: String, packageName: String) =
         TiviMateTuner(TvShell { command -> runBlockingShell(host, command) }, packageName = packageName)
 

@@ -100,64 +100,76 @@ class TiviMateTuner(
     }
 
     /**
-     * Opens the audio or subtitle track picker in the player (long-press OK opens TiviMate's
-     * player menu; its Audio track and CC entries open the pickers) and returns the choices.
+     * Opens TiviMate's audio or subtitle dialog on the TV and returns its choices. TiviMate
+     * ignores KEYCODE_MEDIA_AUDIO_TRACK and KEYCODE_CAPTIONS (checked on a Shield, TiviMate
+     * 5.3.3), so this goes through the player menu: long-press OK, Down, then Right to the tile
+     * and OK. The menu hides itself after a few seconds, so the keys go in one shell command.
      */
     fun openTracks(track: Track): TrackPicker {
         if (!tivimateInFront(shell.exec("dumpsys activity activities"), packageName)) {
             return TrackPicker("TiviMate isn't open on the TV")
         }
         var items = dumpNodes()
-        if (!TiviMateScreens.playerMenuShown(items)) {
-            shell.exec("input keyevent --longpress KEYCODE_DPAD_CENTER")
-            pause(800)
+        TiviMateScreens.trackDialog(items)?.let { open ->
+            if (dialogTrack(open) == track) return picker(open, track)
+            key("KEYCODE_BACK")
+            pause(500)
             items = dumpNodes()
         }
-        if (!TiviMateScreens.playerMenuShown(items)) {
-            // Older versions and some remotes: Down twice opens the same menu.
-            key("KEYCODE_DPAD_DOWN")
-            pause(400)
-            key("KEYCODE_DPAD_DOWN")
-            pause(700)
+        var row = TiviMateScreens.menuRow(items)
+        if (row == null) {
+            if (!TiviMateScreens.fullscreenPlayback(items)) {
+                log("not in playback", items)
+                return TrackPicker("Start playing something in TiviMate first")
+            }
+            shell.exec("input keyevent --longpress KEYCODE_DPAD_CENTER; sleep 0.5; input keyevent KEYCODE_DPAD_DOWN")
+            pause(500)
             items = dumpNodes()
+            row = TiviMateScreens.menuRow(items)
         }
         log("player menu", items)
-        val entry = TiviMateScreens.trackEntry(items, track)
-            ?: return TrackPicker(
-                if (TiviMateScreens.playerMenuShown(items)) "This menu has no ${trackName(track)} entry"
-                else "Couldn't open the player menu. Start playback first",
-            )
-        tap(entry.left, entry.top, entry.right, entry.bottom)
-        pause(800)
-        val dialog = dumpNodes()
-        log("track dialog", dialog)
-        val options = TiviMateScreens.trackOptions(items, dialog, track)
-        return TrackPicker(
-            if (options.isEmpty()) "The ${trackName(track)} menu is open on the TV" else "",
-            options,
-        )
+        if (row == null) return TrackPicker("Couldn't open TiviMate's player menu. Long-press OK on the TV remote to open it")
+        val target = TiviMateScreens.trackTile(row, track)
+            ?: return TrackPicker("TiviMate's player menu has no ${trackName(track)} entry here")
+        shell.exec("input keyevent ${TiviMateScreens.keysTo(row, target).joinToString(" ")}")
+        pause(900)
+        val dialogItems = dumpNodes()
+        log("track dialog", dialogItems)
+        val dialog = TiviMateScreens.trackDialog(dialogItems)
+            ?: return TrackPicker("The ${trackName(track)} menu should be open on the TV")
+        return picker(dialog, track)
     }
 
-    /** Selects [label] in the open track dialog, then closes the player menu. */
+    private fun picker(dialog: TiviMateScreens.TrackDialog, track: Track): TrackPicker {
+        val options = TiviMateScreens.trackOptions(dialog)
+        return TrackPicker(if (options.isEmpty()) "No ${trackName(track)} choices for this stream" else "", options)
+    }
+
+    private fun dialogTrack(dialog: TiviMateScreens.TrackDialog): Track =
+        if (TiviMateScreens.words(dialog.title).firstOrNull() == "audio") Track.Audio else Track.Subtitles
+
+    /** Selects [label] in the open track dialog (Up/Down to it, then OK). */
     fun chooseTrack(track: Track, label: String): String {
-        var items = dumpNodes()
-        var row = items.firstOrNull { it.label == label }
-        if (row == null) {
-            // The dialog was closed meanwhile: open it again.
+        var dialog = TiviMateScreens.trackDialog(dumpNodes())
+        if (dialog == null || dialogTrack(dialog) != track) {
+            // Closed meanwhile (or another one is open): open it again.
             openTracks(track)
-            items = dumpNodes()
-            row = items.firstOrNull { it.label == label } ?: return "Couldn't find $label on the TV"
+            dialog = TiviMateScreens.trackDialog(dumpNodes()) ?: return "Couldn't open the ${trackName(track)} menu on the TV"
         }
-        tap(row.left, row.top, row.right, row.bottom)
-        pause(600)
-        repeat(2) {
-            val now = dumpNodes()
-            if (TiviMateScreens.playerMenuShown(now) || now.any { it.label == label }) {
-                key("KEYCODE_BACK")
-                pause(400)
-            }
+        val keys = TiviMateScreens.keysToOption(dialog, label) ?: return "$label isn't offered on the TV any more"
+        shell.exec("input keyevent ${keys.joinToString(" ")}")
+        pause(700)
+        val after = dumpNodes()
+        if (TiviMateScreens.trackDialog(after) != null) {
+            key("KEYCODE_BACK")
+            pause(300)
         }
         return "${trackName(track).replaceFirstChar { it.uppercase() }}: $label"
+    }
+
+    /** Closes an open track dialog (the phone sheet was dismissed). */
+    fun closeTracks() {
+        if (TiviMateScreens.trackDialog(dumpNodes()) != null) key("KEYCODE_BACK")
     }
 
     private fun trackName(track: Track) = if (track == Track.Audio) "audio track" else "subtitles"

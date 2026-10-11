@@ -86,54 +86,132 @@ object TiviMateScreens {
         episodeCode(node.label)?.let { (s, e) -> if (s == season) e else null } ?: leadingEpisodeNumber(node.label)
     }.distinct()
 
-    // Player menu (long-press OK while watching): an icon row with Audio track, CC, Video tracks...
+    // Player menu, as on TiviMate 5.3 (Shield): long-press OK opens a quick panel (TV guide,
+    // History, recent channels); Down from there opens the menu row: Search, Channels list,
+    // Recordings, Multiview, Picture-in-picture, <video: "1280 × 720">, <audio: "Stereo">,
+    // <audio offset: "0 ms">, <CC: "Closed captions 1">, <display mode>, <sleep timer>. The tiles
+    // show the current value, not a name, and have no content description; a tap only focuses a
+    // tile, so they are reached with Right presses and opened with OK.
 
     enum class Track { Audio, Subtitles }
 
-    private val AUDIO_LABELS = listOf(listOf("audio", "track"), listOf("audio", "tracks"), listOf("audio"), listOf("soundtrack"), listOf("audio", "language"))
-    private val SUBTITLE_LABELS = listOf(listOf("cc"), listOf("closed", "captions"), listOf("subtitles"), listOf("subtitle"), listOf("captions"), listOf("subtitle", "track"), listOf("subtitles", "tracks"))
+    /** The menu row: text of each tile left to right, and which one has focus. */
+    data class MenuRow(val tiles: List<UiNode>, val focused: Int)
 
-    /** Neighbouring menu entries that start with the same words ("Audio offset", "Subtitle size"). */
+    fun menuRow(items: List<UiNode>): MenuRow? {
+        val scale = screenScale(items)
+        val band = scaled(700, scale)
+        val tile = items.firstOrNull {
+            it.focused && it.clickable && it.top >= band && (it.bottom - it.top) < scaled(300, scale) && (it.right - it.left) < scaled(500, scale)
+        } ?: return null
+        val tiles = items.filter { it.text.isNotBlank() && it.centerY in tile.top..tile.bottom && it.top >= band }
+            .sortedBy { it.left }
+            .distinctBy { it.left }
+        if (tiles.size < 3) return null
+        val focused = tiles.indexOfFirst { tile.contains(it) }
+        if (focused < 0) return null
+        return MenuRow(tiles, focused)
+    }
+
+    fun playerMenuShown(items: List<UiNode>): Boolean = menuRow(items) != null
+
+    /** "0 ms", "-120 ms": the audio offset tile, which sits right after the audio track tile. */
+    fun isOffset(label: String): Boolean {
+        val w = words(label.replace("−", "-"))
+        return w.size == 2 && w[1] == "ms" && w[0].all { it.isDigit() }
+    }
+
+    /** "1280 × 720", "1920x1080": the video track tile, right before the audio track tile. */
+    fun isResolution(label: String): Boolean {
+        val compact = label.replace(" ", "").lowercase()
+        val sep = compact.indexOfFirst { it == '×' || it == 'x' }
+        return sep > 0 && compact.substring(0, sep).all { it.isDigit() } &&
+            compact.substring(sep + 1).isNotEmpty() && compact.substring(sep + 1).all { it.isDigit() }
+    }
+
+    private val AUDIO_LABELS = listOf(listOf("audio", "track"), listOf("audio", "tracks"), listOf("audio"))
+    private val SUBTITLE_LABELS = listOf(listOf("closed", "captions"), listOf("subtitles"), listOf("subtitle"), listOf("cc"), listOf("captions"))
     private val NOT_TRACKS = setOf("offset", "delay", "sync", "description", "size", "style", "settings", "decoder", "passthrough", "boost")
 
-    /** Whether [label] is the player-menu entry for [track]. */
+    /** Whether [label] names [track] ("Audio track", "Closed captions 1", "Subtitles: English"). */
     fun isTrackEntry(label: String, track: Track): Boolean {
         val w = words(label)
         if (w.isEmpty() || w.any { it in NOT_TRACKS }) return false
         val labels = if (track == Track.Audio) AUDIO_LABELS else SUBTITLE_LABELS
-        // The entry may carry the current value after its name ("Audio track English", "CC Off").
         return labels.any { l -> w == l || (w.size > l.size && w.take(l.size) == l && w.size <= l.size + 3) }
     }
 
-    fun trackEntry(items: List<UiNode>, track: Track): UiNode? =
-        items.filter { isTrackEntry(it.label, track) }.maxByOrNull { (if (it.clickable) 2 else 0) + (if (it.text.isBlank()) 1 else 0) }
+    /** Index of the tile for [track] in the menu row, by name first, then by its neighbours. */
+    fun trackTile(row: MenuRow, track: Track): Int? {
+        val labels = row.tiles.map { it.text }
+        labels.indexOfFirst { isTrackEntry(it, track) }.takeIf { it >= 0 }?.let { return it }
+        val offset = labels.indexOfFirst(::isOffset)
+        val video = labels.indexOfFirst(::isResolution)
+        return when (track) {
+            Track.Audio -> when {
+                offset > 0 -> offset - 1
+                video >= 0 && video + 1 < labels.size -> video + 1
+                else -> null
+            }
+            Track.Subtitles -> if (offset >= 0 && offset + 1 < labels.size) offset + 1 else null
+        }
+    }
 
-    /** The player menu is showing: TiviMate's menu has these entries side by side. */
-    fun playerMenuShown(items: List<UiNode>): Boolean =
-        trackEntry(items, Track.Audio) != null || trackEntry(items, Track.Subtitles) != null
+    /** Keys that move the menu focus from the focused tile to [target] and open it. */
+    fun keysTo(row: MenuRow, target: Int): List<String> {
+        val delta = target - row.focused
+        val move = if (delta >= 0) "KEYCODE_DPAD_RIGHT" else "KEYCODE_DPAD_LEFT"
+        return List(kotlin.math.abs(delta)) { move } + "KEYCODE_DPAD_CENTER"
+    }
 
     data class TrackOption(val label: String, val selected: Boolean)
 
-    /**
-     * The choices in a track dialog: the rows that appeared after opening it. Uses checkable
-     * rows when TiviMate marks them, else new clickable or text rows; drops the dialog title
-     * and settings entries.
-     */
-    fun trackOptions(before: List<UiNode>, after: List<UiNode>, track: Track): List<TrackOption> {
-        val old = before.map { it.label to it.top }.toSet()
-        val fresh = after.filter { it.label.isNotBlank() && (it.label to it.top) !in old }
-        val checkable = fresh.filter { it.checkable }
-        val rows = (checkable.ifEmpty { fresh.filter { it.clickable || it.text.isNotBlank() } })
-            .filter { !isTrackEntry(it.label, track) && !isDialogChrome(it.label) }
-        val selectedTexts = after.filter { it.checked || it.selected }.map { it.label }.toSet()
-        return rows.distinctBy { it.label }.map { TrackOption(it.label, it.checked || it.selected || it.label in selectedTexts) }
+    /** A track dialog: "Audio tracks" or "Closed captions" with one row per choice. */
+    data class TrackDialog(val title: String, val options: List<UiNode>, val focused: Int)
+
+    private val DIALOG_TITLES = setOf("audio tracks", "audio track", "closed captions", "subtitles", "subtitle tracks")
+
+    fun trackDialog(items: List<UiNode>): TrackDialog? {
+        val title = items.firstOrNull { words(it.text).joinToString(" ") in DIALOG_TITLES && !it.clickable && it.resourceId.isNotEmpty() && !it.resourceId.endsWith("id/title") }
+            ?: items.firstOrNull { words(it.text).joinToString(" ") in DIALOG_TITLES && !it.clickable }
+            ?: return null
+        val below = items.filter { it.top > title.top && it.text.isNotBlank() && it.left >= title.left - 100 }
+        val titled = below.filter { it.resourceId.endsWith("id/title") }
+        val rows = (titled.ifEmpty { below.filter { !it.resourceId.endsWith("id/summary") } })
+            .filter { !isDialogChrome(it.text) }
+            .sortedBy { it.top }
+        if (rows.isEmpty()) return null
+        val focusedRow = items.firstOrNull { it.focused && it.clickable && rows.any { r -> it.contains(r) } }
+        val focused = focusedRow?.let { f -> rows.indexOfFirst { f.contains(it) } } ?: -1
+        return TrackDialog(title.text, rows, focused)
+    }
+
+    /** The choices of an open track dialog. The focused row is the current track when it opens. */
+    fun trackOptions(dialog: TrackDialog): List<TrackOption> =
+        dialog.options.mapIndexed { i, node -> TrackOption(node.text, i == dialog.focused || node.checked) }
+
+    /** Keys that move the dialog focus to the row labelled [label] and select it. */
+    fun keysToOption(dialog: TrackDialog, label: String): List<String>? {
+        val target = dialog.options.indexOfFirst { it.text == label }
+        if (target < 0) return null
+        val from = if (dialog.focused >= 0) dialog.focused else 0
+        val delta = target - from
+        val move = if (delta >= 0) "KEYCODE_DPAD_DOWN" else "KEYCODE_DPAD_UP"
+        return List(kotlin.math.abs(delta)) { move } + "KEYCODE_DPAD_CENTER"
     }
 
     private fun isDialogChrome(label: String): Boolean {
-        val w = words(label)
-        val text = w.joinToString(" ")
-        return text in setOf("audio tracks", "audio track", "closed captions", "subtitles", "cc", "cancel", "ok") ||
-            "settings" in w || text.startsWith("show closed captions") || text.startsWith("system settings")
+        val text = words(label).joinToString(" ")
+        return text in DIALOG_TITLES || text in setOf("cancel", "ok") || "settings" in words(label) ||
+            text.startsWith("show closed captions") || text.startsWith("closed captions may not")
+    }
+
+    /** Full-screen playback with nothing open: the player's root view holds focus. */
+    fun fullscreenPlayback(items: List<UiNode>): Boolean {
+        val root = items.firstOrNull() ?: return false
+        return items.any {
+            it.focused && it.left == root.left && it.top == root.top && it.right == root.right && it.bottom == root.bottom
+        } && items.none { it.className.endsWith("StreamingTextView") } && !onMainMenu(items)
     }
 
     fun words(value: String): List<String> {
