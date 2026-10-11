@@ -10,7 +10,16 @@ data class UiNode(
     val top: Int,
     val right: Int,
     val bottom: Int,
-)
+    /** content-desc: icon buttons (TiviMate's player menu) carry their label here. */
+    val description: String = "",
+    val checkable: Boolean = false,
+    val checked: Boolean = false,
+) {
+    /** Text, or the content description when there is no text. */
+    val label: String get() = text.ifBlank { description }
+    val centerX: Int get() = (left + right) / 2
+    val centerY: Int get() = (top + bottom) / 2
+}
 
 fun parseNodes(xml: String): List<UiNode> {
     val start = xml.indexOf("<hierarchy")
@@ -33,6 +42,9 @@ fun parseNodes(xml: String): List<UiNode> {
             top = box.groupValues[2].toInt(),
             right = box.groupValues[3].toInt(),
             bottom = box.groupValues[4].toInt(),
+            description = attrs["content-desc"].orEmpty(),
+            checkable = attrs["checkable"] == "true",
+            checked = attrs["checked"] == "true",
         )
     }
     return nodes
