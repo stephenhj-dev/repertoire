@@ -71,6 +71,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import app.oslo.repertoire.ui.components.VersionRow
+import app.oslo.repertoire.ui.components.VersionInfoLine
 import app.oslo.repertoire.tmdb.TitleNormalizer
 import app.oslo.repertoire.tmdb.Tmdb
 import app.oslo.repertoire.tmdb.TmdbImages
@@ -104,15 +105,14 @@ fun TitleDetailScreen(
     val context = LocalContext.current
     val parsed = TitleNormalizer.parse(route.name)
     val title = detail?.displayTitle ?: TitleDisplay.cleanName(route.name)
-    val primary = state.library.firstOrNull()
-    val favoriteName = if (route.catalogId > 0) route.name else primary?.name
+    val favoriteName = if (route.catalogId > 0) route.name else state.versions.firstOrNull()
 
     var saving by remember { mutableStateOf(false) }
     if (saving) {
         val ref = if (detail != null) {
             TitleRef(route.kind, detail.id, detail.displayTitle, detail.year, detail.posterPath)
         } else {
-            TitleRef(route.kind, 0, title, parsed.year, null, catalogName = state.library.firstOrNull()?.name ?: route.name)
+            TitleRef(route.kind, 0, title, parsed.year, null, catalogName = state.versions.firstOrNull() ?: route.name)
         }
         AddToWatchlistSheet(model, ref, onDismiss = { saving = false })
     }
@@ -134,6 +134,7 @@ fun TitleDetailScreen(
             item(key = "actions") {
                 Actions(
                     model = model,
+                    page = page,
                     state = state,
                     trailerKey = detail?.videos?.results?.let(::pickTrailer)?.key,
                     favorite = favoriteName?.let { model.isFavorite(route.kind, it) },
@@ -279,6 +280,7 @@ private fun factsLine(kind: String, detail: TmdbTitleDetail?, fallbackYear: Int?
 @Composable
 private fun Actions(
     model: GuideViewModel,
+    page: TitleDetailViewModel,
     state: TitleDetailState,
     trailerKey: String?,
     favorite: Boolean?,
@@ -286,7 +288,9 @@ private fun Actions(
     onTrailer: (String) -> Unit,
     onSave: (() -> Unit)?,
 ) {
-    val versions = model.orderVersions(state.versions)
+    // Parsing names is cheap (and cached), but only redo it when the names or preferences change.
+    val prefs = model.playbackPrefs
+    val versions = remember(state.versions, prefs) { model.orderVersions(state.versions) }
     val best = versions.firstOrNull()
     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
         if (best != null) {
@@ -306,6 +310,10 @@ private fun Actions(
                         Text(best.tags.label, style = MaterialTheme.typography.labelSmall)
                     }
                 }
+            }
+        } else if (state.loading && Tmdb.enabled) {
+            Box(Modifier.fillMaxWidth().height(56.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
             }
         } else if (!state.loading && Tmdb.enabled) {
             Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
@@ -359,30 +367,51 @@ private fun Actions(
                 }
             }
         }
-        when {
-            versions.size == 1 -> {
-                Spacer(Modifier.height(10.dp))
-                ProviderName(versions.first().name)
+        if (best != null) {
+            Spacer(Modifier.height(10.dp))
+            ProviderName(best.name)
+        }
+        val others = versions.size - 1
+        if (!state.expanded) {
+            if (others > 0 || (state.detail != null && best != null)) {
+                Spacer(Modifier.height(6.dp))
+                androidx.compose.material3.TextButton(onClick = page::expand, contentPadding = PaddingValues(horizontal = 0.dp)) {
+                    Text(if (others > 0) "More versions ($others)" else "Look for other versions")
+                }
             }
-            versions.size > 1 -> {
-                Spacer(Modifier.height(14.dp))
+        } else {
+            Spacer(Modifier.height(14.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "${versions.size} versions",
+                    if (versions.size == 1) "1 version" else "${versions.size} versions",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Spacer(Modifier.height(2.dp))
-                Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
-                    Column {
-                        versions.forEach { version ->
-                            VersionRow(
-                                version = version,
-                                best = version == best,
-                                tuning = model.tune?.name == version.name,
-                                enabled = model.tune == null,
-                                onPlay = { model.play(version.name) },
-                            )
-                        }
+                if (state.searchingMore) {
+                    Spacer(Modifier.width(8.dp))
+                    CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Looking for more…", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Spacer(Modifier.height(2.dp))
+            Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+                Column {
+                    versions.forEach { version ->
+                        VersionRow(
+                            version = version,
+                            best = version == best,
+                            tuning = model.tune?.name == version.name,
+                            enabled = model.tune == null,
+                            onPlay = { model.play(version.name) },
+                            info = when (val info = state.info[version.name]) {
+                                null -> null
+                                VersionInfo.Loading -> VersionInfoLine.Loading
+                                VersionInfo.Failed -> VersionInfoLine.Text("Couldn't reach the portal. Tap ⓘ to retry.")
+                                is VersionInfo.Loaded -> VersionInfoLine.Text(info.detail?.line?.ifEmpty { null } ?: "The portal has no stream details")
+                            },
+                            onInfo = { page.loadInfo(version.name) },
+                        )
                     }
                 }
             }

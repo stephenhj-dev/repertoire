@@ -1,5 +1,10 @@
 package app.oslo.repertoire.data
 
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+
 import android.os.Handler
 import android.os.Looper
 import android.util.JsonReader
@@ -106,6 +111,19 @@ object PortalCheck {
 data class XtreamTitleInfo(val tmdbId: Int?, val year: Int?)
 
 object XtreamInfo {
+    /** Stream details for one catalog version. Blocking; null when the portal has none. */
+    fun details(portal: String, username: String, password: String, kind: String, remoteId: String): VersionDetail? {
+        val action = if (kind == "show") "get_series_info&series_id=" else "get_vod_info&vod_id="
+        val id = URLEncoder.encode(remoteId, Charsets.UTF_8.name())
+        val connection = PortalUrl.open(PortalUrl.action(portal, username, password, action + id))
+        val body = try {
+            connection.inputStream.bufferedReader().use { it.readText() }
+        } finally {
+            connection.disconnect()
+        }
+        return VersionDetail.parse(body)
+    }
+
     private val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; isLenient = true }
 
     /** Asks the portal about one title. Blocking; null when the portal has nothing useful. */
@@ -126,6 +144,84 @@ object XtreamInfo {
         val tmdbId = field("tmdb_id", "tmdb")?.trim()?.toIntOrNull()?.takeIf { it > 0 }
         val year = TitleNormalizer.yearOf(field("releasedate", "releaseDate", "release_date", "year"))
         return if (tmdbId == null && year == null) null else XtreamTitleInfo(tmdbId, year)
+    }
+}
+
+/** Stream details of one catalog version from get_vod_info / get_series_info (first episode for series). */
+data class VersionDetail(
+    val width: Int? = null,
+    val height: Int? = null,
+    val videoCodec: String? = null,
+    val audioCodec: String? = null,
+    val audioChannels: Int? = null,
+    val audioLanguage: String? = null,
+    val durationSecs: Int? = null,
+    val bitrateKbps: Int? = null,
+    val container: String? = null,
+) {
+    /** "1920×1080 · H264 · AAC 5.1 · eng · 1h 51m"; empty when the portal said nothing. */
+    val line: String
+        get() = buildList {
+            if (width != null && height != null && width > 0 && height > 0) add("$width×$height")
+            videoCodec?.let { add(it.uppercase()) }
+            val audio = listOfNotNull(
+                audioCodec?.uppercase(),
+                audioChannels?.let { when (it) { 1 -> "mono"; 2 -> "stereo"; 6 -> "5.1"; 8 -> "7.1"; else -> "${it}ch" } },
+            ).joinToString(" ")
+            if (audio.isNotEmpty()) add(audio)
+            audioLanguage?.let { add(it) }
+            durationSecs?.takeIf { it > 0 }?.let { add(if (it >= 3600) "${it / 3600}h ${(it % 3600) / 60}m" else "${it / 60}m") }
+            bitrateKbps?.takeIf { it > 0 }?.let { add(if (it >= 1000) "%.1f Mb/s".format(it / 1000.0) else "$it kb/s") }
+            container?.let { add(it.lowercase()) }
+        }.joinToString(" · ")
+
+    companion object {
+        /** Parses get_vod_info / get_series_info JSON. Pure, tolerant of missing or odd fields. */
+        fun parse(body: String): VersionDetail? {
+            val root = runCatching { kotlinx.serialization.json.Json.parseToJsonElement(body) }.getOrNull() as? JsonObject ?: return null
+            var info = root["info"] as? JsonObject
+            var container = ((root["movie_data"] as? JsonObject)?.get("container_extension") as? JsonPrimitive)?.contentOrNull
+            // Series: the first episode carries the stream details.
+            val episodes = root["episodes"]
+            val firstEpisode = when (episodes) {
+                is JsonObject -> (episodes.values.firstOrNull() as? JsonArray)?.firstOrNull() as? JsonObject
+                is JsonArray -> (episodes.firstOrNull() as? JsonArray)?.firstOrNull() as? JsonObject
+                else -> null
+            }
+            if (firstEpisode != null) {
+                (firstEpisode["info"] as? JsonObject)?.let { if (it["video"] != null || it["duration_secs"] != null) info = it }
+                container = container ?: (firstEpisode["container_extension"] as? JsonPrimitive)?.contentOrNull
+            }
+            val data = info ?: return null
+            fun text(obj: JsonObject?, name: String) = (obj?.get(name) as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() && it != "null" }
+            fun number(obj: JsonObject?, name: String) = text(obj, name)?.toDoubleOrNull()?.toInt()
+            val video = data["video"] as? JsonObject
+            val audio = data["audio"] as? JsonObject
+            val tags = audio?.get("tags") as? JsonObject
+            val duration = number(data, "duration_secs") ?: text(data, "duration")?.let(::clockSeconds)
+            val detail = VersionDetail(
+                width = number(video, "width"),
+                height = number(video, "height"),
+                videoCodec = text(video, "codec_name"),
+                audioCodec = text(audio, "codec_name"),
+                audioChannels = number(audio, "channels"),
+                audioLanguage = text(tags, "language"),
+                durationSecs = duration,
+                bitrateKbps = number(data, "bitrate"),
+                container = container?.takeIf { it.isNotBlank() },
+            )
+            return detail.takeIf { it.line.isNotEmpty() }
+        }
+
+        /** "01:51:00" -> 6660. */
+        private fun clockSeconds(value: String): Int? {
+            val parts = value.trim().split(':').map { it.toIntOrNull() ?: return null }
+            return when (parts.size) {
+                3 -> parts[0] * 3600 + parts[1] * 60 + parts[2]
+                2 -> parts[0] * 60 + parts[1]
+                else -> null
+            }
+        }
     }
 }
 

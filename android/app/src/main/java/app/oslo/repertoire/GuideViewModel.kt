@@ -686,7 +686,6 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
                     syncStep = friendlyStep(step)
                 }
                 meta.edit().putBoolean("iconsFetched", true).putBoolean("tmdbFieldsFetched", true).apply()
-                Tmdb.invalidateLibrary()
                 resolver.catalogChanged()
                 reload()
                 loadCounts()
@@ -1048,6 +1047,7 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         searchBusy = true
+        val searchStart = System.nanoTime()
         val like = likeNeedle(needle)
         val scope = searchScope
         rawSearch = if (scope == SearchScope.All) {
@@ -1063,6 +1063,7 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
         } else {
             database.catalog().search(scope.kind, null, null, like, needle, 120).map { it.toTitle(captionFor(it.kind)) }
         }
+        Perf.log("search '$needle' db: ${(System.nanoTime() - searchStart) / 1_000_000} ms")
         searchResults = present(rawSearch)
         searchBusy = false
     }
@@ -1123,7 +1124,11 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
      * row with TMDB's title, year and poster plus version badges; unmatched ones keep a cleaned
      * name. Titles never looked up are queued for the resolver. Channels pass through.
      */
-    private suspend fun present(raw: List<GuideRow>): List<GuideRow> {
+    /** Grouping and tag parsing run off the main thread; database work is Room's. */
+    private suspend fun present(raw: List<GuideRow>): List<GuideRow> =
+        withContext(Dispatchers.Default) { Perf.time("present ${raw.size} rows") { presentNow(raw) } }
+
+    private suspend fun presentNow(raw: List<GuideRow>): List<GuideRow> {
         val titles = raw.filterIsInstance<GuideRow.Title>().filter { it.kind != "live" }
         if (titles.isEmpty()) return raw
         val dao = database.catalog()

@@ -4,9 +4,7 @@ import android.content.Context
 import app.oslo.repertoire.data.CatalogDatabase
 import app.oslo.repertoire.data.WatchlistItemRow
 import app.oslo.repertoire.data.WatchlistRow
-import app.oslo.repertoire.tmdb.Tmdb
-import app.oslo.repertoire.tmdb.TmdbRef
-import app.oslo.repertoire.tmdb.tmdbMediaType
+import app.oslo.repertoire.tmdb.CatalogLookup
 
 /** A title that can go on a watchlist: TMDB id (0 when TMDB doesn't know it) plus a snapshot. */
 data class TitleRef(
@@ -58,19 +56,13 @@ class Watchlists(context: Context) {
         if (items.isEmpty()) return emptyMap()
         val catalog = db.catalog()
         val out = HashMap<Long, List<String>>()
-        val index = runCatching { Tmdb.library(app) }.getOrNull()
         items.groupBy { it.kind }.forEach { (kind, rows) ->
-            val ids = rows.map { it.tmdbId }.filter { it > 0 }.distinct()
-            val byId = HashMap<Int, MutableList<String>>()
-            ids.chunked(500).forEach { chunk ->
-                catalog.versionNames(kind, chunk).forEach { byId.getOrPut(it.tmdbId) { mutableListOf() } += it.name }
-            }
+            val byId = CatalogLookup.byIds(app, kind, rows.map { it.tmdbId })
             val named = rows.mapNotNull { it.catalogName }.distinct().chunked(500)
                 .flatMap { catalog.titlesNamed(kind, it) }.map { it.name }.toSet()
             rows.forEach { row ->
                 out[row.id] = if (row.tmdbId > 0) {
-                    val matched = index?.find(TmdbRef(tmdbMediaType(kind), row.tmdbId, row.title, null, row.year))?.map { it.name }.orEmpty()
-                    (byId[row.tmdbId].orEmpty() + matched).distinct()
+                    byId[row.tmdbId].orEmpty().map { it.name }.distinct()
                 } else {
                     listOfNotNull(row.catalogName?.takeIf { it in named })
                 }

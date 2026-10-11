@@ -100,3 +100,27 @@ fun pickSearchResult(query: ParsedTitle, results: List<SearchCandidate>): Search
             keys(c).any { key -> key.isNotEmpty() && (key.startsWith(wanted) || wanted.startsWith(key)) }
     }
 }
+
+private val ARTICLES = setOf("the", "a", "an", "and", "of", "le", "la", "les", "der", "die", "das", "el", "los", "il")
+
+/**
+ * The word of [title] to search the catalog with (SQL LIKE, case-insensitive for ASCII only):
+ * the longest plain ASCII word of at least three characters that isn't an article. Null when
+ * the title has none ("Amélie", "初恋"), so callers skip the name search.
+ */
+fun likeWord(title: String): String? {
+    val words = ArrayList<String>()
+    val current = StringBuilder()
+    for (ch in title + " ") {
+        if (ch.isLetterOrDigit()) {
+            current.append(ch)
+        } else {
+            if (current.isNotEmpty()) words += current.toString()
+            current.setLength(0)
+        }
+    }
+    fun plain(word: String) = word.all { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' }
+    return words
+        .filter { it.length >= 3 && plain(it) && it.lowercase() !in ARTICLES }
+        .maxByOrNull { it.length }
+}

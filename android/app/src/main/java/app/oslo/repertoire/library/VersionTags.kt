@@ -186,6 +186,18 @@ object VersionTagParser {
         return VersionTags(languages.toList(), quality, multi, sub, dub, hdr, dv)
     }
 
+    private val cache = object : LinkedHashMap<String, VersionTags>(256, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, VersionTags>?) = size > 6_000
+    }
+
+    /** [parse] with a small LRU cache: lists re-group the same names often. Thread-safe. */
+    fun cached(raw: String): VersionTags {
+        synchronized(cache) { cache[raw]?.let { return it } }
+        val parsed = parse(raw)
+        synchronized(cache) { cache[raw] = parsed }
+        return parsed
+    }
+
     /** The two-letter code for a device locale language ("nb" -> "NO"), or EN when unknown. */
     fun languageForLocale(language: String?): String {
         val upper = language.orEmpty().uppercase()
@@ -202,7 +214,7 @@ object VersionTagParser {
 data class PlaybackPrefs(val language: String = "EN", val prefer4k: Boolean = false)
 
 /** One playable catalog entry of a title. */
-data class Version(val name: String, val tags: VersionTags = VersionTagParser.parse(name))
+data class Version(val name: String, val tags: VersionTags = VersionTagParser.cached(name))
 
 object VersionPicker {
     private fun qualityRank(q: Quality?, prefer4k: Boolean): Int = if (prefer4k) {

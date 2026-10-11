@@ -40,7 +40,8 @@ class TitleResolver(context: Context, private val scope: CoroutineScope) {
     private val backfillPace = RateLimiter(BACKFILL_SPACING_MS)
     private var job: Job? = null
     @Volatile private var backfillDone = false
-    private var lastInvalidate = 0L
+    /** TMDB title/year/poster per portal id seen this session: many names share one id. */
+    private val known = ConcurrentHashMap<Pair<String, Int>, ResolvedTitle>()
 
     /** Emits after new lookups were saved. */
     val updates: SharedFlow<Unit> = _updates
@@ -74,7 +75,6 @@ class TitleResolver(context: Context, private val scope: CoroutineScope) {
                     .filter { inFlight.add(key(it)) }
                 if (pending.isEmpty()) {
                     backfillDone = true
-                    invalidate(force = true)
                     null
                 } else {
                     pending
@@ -91,7 +91,6 @@ class TitleResolver(context: Context, private val scope: CoroutineScope) {
             if (results.saved.isNotEmpty()) {
                 runCatching { dao.saveResolved(results.saved) }
                 _updates.tryEmit(Unit)
-                invalidate(force = false)
             }
             if (results.offline) {
                 // Offline or TMDB unhappy: back off and don't hammer.
@@ -118,7 +117,8 @@ class TitleResolver(context: Context, private val scope: CoroutineScope) {
             batch.map { item ->
                 async {
                     gate.withPermit {
-                        if (background) backfillPace.acquire()
+                        val repeat = item.tmdbId?.let { known.containsKey(item.kind to it) } == true
+                        if (background && !repeat) backfillPace.acquire()
                         try {
                             withTimeoutOrNull(30_000) { lookup(item) } ?: run {
                                 networkErrors.incrementAndGet()
@@ -157,21 +157,14 @@ class TitleResolver(context: Context, private val scope: CoroutineScope) {
         val now = System.currentTimeMillis()
         val portalId = item.tmdbId
         if (portalId != null) {
+            known[item.kind to portalId]?.let { return it.copy(name = item.name, checkedAt = now) }
             val detail = Tmdb.basic(app, mediaType, portalId)
             return ResolvedTitle(item.kind, item.name, portalId, detail.displayTitle.ifBlank { null }, detail.year, detail.posterPath, now)
+                .also { if (known.size < 50_000) known[item.kind to portalId] = it }
         }
         val parsed = TitleNormalizer.parse(item.name)
         val hit = Tmdb.searchCandidate(app, mediaType, parsed.copy(year = item.year ?: parsed.year))
         return ResolvedTitle(item.kind, item.name, hit?.id, hit?.title, hit?.year, hit?.posterPath, now)
-    }
-
-    /** The "in your library" index includes looked-up ids; rebuild it now and then, not per batch. */
-    private fun invalidate(force: Boolean) {
-        val now = System.currentTimeMillis()
-        if (force || now - lastInvalidate > 60_000) {
-            lastInvalidate = now
-            Tmdb.invalidateLibrary()
-        }
     }
 
     private companion object {

@@ -10,6 +10,9 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import app.oslo.repertoire.navigation.PersonRoute
+import app.oslo.repertoire.Perf
+import app.oslo.repertoire.tmdb.CatalogLookup
+import app.oslo.repertoire.tmdb.catalogKind
 import app.oslo.repertoire.tmdb.CreditGroup
 import app.oslo.repertoire.tmdb.FilmCredit
 import app.oslo.repertoire.tmdb.Filmography
@@ -76,13 +79,17 @@ class PersonViewModel(app: Application, handle: SavedStateHandle) : AndroidViewM
             val context = getApplication<Application>()
             try {
                 val person = Tmdb.person(context, route.tmdbPersonId)
-                val library = Tmdb.library(context)
-                val (groups, known) = withContext(Dispatchers.Default) {
-                    val built = Filmography.build(person.combinedCredits ?: TmdbCombinedCredits())
-                    val withLibrary = built.mapValues { (_, credits) -> credits.map { PersonCredit(it, library.find(it.ref())) } }
-                    val known = Filmography.knownFor(built).map { PersonCredit(it, library.find(it.ref())) }
-                    withLibrary to known
+                val built = withContext(Dispatchers.Default) { Filmography.build(person.combinedCredits ?: TmdbCombinedCredits()) }
+                // Catalog versions by TMDB id: one indexed query per media type for all credits.
+                val all = built.values.flatten()
+                val owned = Perf.time("person ${route.tmdbPersonId} library") {
+                    all.groupBy { it.mediaType }.flatMap { (mediaType, credits) ->
+                        CatalogLookup.byIds(context, catalogKind(mediaType), credits.map { it.id }).map { (id, entries) -> (mediaType to id) to entries }
+                    }.toMap()
                 }
+                fun withLibrary(credit: FilmCredit) = PersonCredit(credit, owned[credit.mediaType to credit.id].orEmpty())
+                val groups = built.mapValues { (_, credits) -> credits.map(::withLibrary) }
+                val known = Filmography.knownFor(built).map(::withLibrary)
                 if (group == null || group !in groups) group = Filmography.primaryGroup(built(groups), person.knownForDepartment)
                 state = PersonState(loading = false, person = person, groups = groups, knownFor = known)
             } catch (error: CancellationException) {

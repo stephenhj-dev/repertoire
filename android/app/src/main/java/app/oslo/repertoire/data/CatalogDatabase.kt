@@ -75,8 +75,8 @@ data class ResolvedTitle(
 /** A catalog movie/series that still needs a TMDB lookup. */
 data class PendingTitle(val kind: String, val name: String, val tmdbId: Int?, val year: Int?)
 
-/** A catalog name and the TMDB id it belongs to (from the portal or a lookup). */
-data class VersionName(val kind: String, val name: String, val tmdbId: Int)
+/** A catalog entry and the TMDB id it belongs to (from the portal or a lookup). */
+data class VersionName(val id: Long, val kind: String, val name: String, val tmdbId: Int, val icon: String?, val year: Int?)
 
 @Entity(tableName = "groups", primaryKeys = ["kind", "categoryId"])
 data class GroupRow(
@@ -128,7 +128,8 @@ interface CatalogDao {
 
     /**
      * Movies and series with no lookup yet, or whose "no match" is older than [retryBefore],
-     * one row per distinct name; portal TMDB ids first since they are one cheap request each.
+     * one row per distinct name. Names without a portal id first: they need the lookup to be
+     * grouped and found at all, while portal ids only gain a cleaner title and poster.
      */
     @Query(
         """
@@ -137,24 +138,38 @@ interface CatalogDao {
         WHERE t.banner = 0 AND t.kind IN ('movie', 'show')
           AND (r.name IS NULL OR (r.tmdbId IS NULL AND r.checkedAt < :retryBefore))
         GROUP BY t.kind, t.name
-        ORDER BY MAX(t.tmdbId) IS NULL, t.kind, t.name
+        ORDER BY MAX(t.tmdbId) IS NOT NULL, t.kind, t.name
         LIMIT :limit
         """,
     )
     suspend fun pendingTitles(retryBefore: Long, limit: Int): List<PendingTitle>
 
-    /** Every catalog name for these TMDB ids, by the portal's id or a lookup. */
+    /** Every catalog entry for these TMDB ids, by the portal's id or a lookup. Both parts use indexes. */
     @Query(
         """
-        SELECT kind, name, tmdbId FROM titles
+        SELECT id, kind, name, tmdbId, icon, year FROM titles
         WHERE banner = 0 AND kind = :kind AND tmdbId IN (:ids)
         UNION
-        SELECT t.kind AS kind, t.name AS name, r.tmdbId AS tmdbId
+        SELECT t.id AS id, t.kind AS kind, t.name AS name, r.tmdbId AS tmdbId, t.icon AS icon, t.year AS year
         FROM tmdb_resolved r JOIN titles t ON t.kind = r.kind AND t.name = r.name
         WHERE r.kind = :kind AND r.tmdbId IN (:ids) AND t.banner = 0 AND t.tmdbId IS NULL
         """,
     )
     suspend fun versionNames(kind: String, ids: List<Int>): List<VersionName>
+
+    /**
+     * Entries without a TMDB id whose name contains [needle] (escaped for LIKE), as candidates
+     * for matching a TMDB title by name. One scan; only used on request.
+     */
+    @Query(
+        """
+        SELECT t.id AS id, t.kind AS kind, t.name AS name, t.icon AS icon, r.tmdbId AS tmdbId, t.year AS year
+        FROM titles t LEFT JOIN tmdb_resolved r ON r.kind = t.kind AND r.name = t.name
+        WHERE t.banner = 0 AND t.kind = :kind AND t.tmdbId IS NULL AND t.name LIKE '%' || :needle || '%' ESCAPE '\'
+        LIMIT :limit
+        """,
+    )
+    suspend fun nameCandidates(kind: String, needle: String, limit: Int): List<LibraryRow>
 
     @Query("SELECT * FROM titles WHERE banner = 0 AND kind = :kind AND name IN (:names)")
     suspend fun titlesNamed(kind: String, names: List<String>): List<TitleRow>

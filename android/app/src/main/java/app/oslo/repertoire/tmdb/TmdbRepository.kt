@@ -12,19 +12,15 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-/** App-wide access to TMDB and to the catalog index used for "in your library" matching. */
+/** App-wide access to TMDB. Catalog matching is [CatalogLookup] (indexed queries). */
 object Tmdb {
     /** False when the build has no tmdb.properties: every TMDB section is hidden. */
     val enabled: Boolean get() = BuildConfig.TMDB_READ_TOKEN.isNotBlank()
 
     @Volatile private var client: TmdbClient? = null
-    private val indexLock = Mutex()
     private val portalScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    @Volatile private var index: LibraryIndex? = null
 
     private fun client(context: Context): TmdbClient = client ?: synchronized(this) {
         client ?: TmdbClient(
@@ -114,15 +110,4 @@ object Tmdb {
         return searchTitle(context, mediaType, parsed.copy(year = year ?: parsed.year))
     }
 
-    /** The catalog's movies and series, indexed for matching. Built once per catalog refresh. */
-    suspend fun library(context: Context): LibraryIndex = index ?: indexLock.withLock {
-        index ?: withContext(Dispatchers.IO) {
-            val rows = CatalogDatabase.get(context).catalog().libraryRows()
-            LibraryIndex(rows.map { LibraryEntry(it.id, it.kind, it.name, it.icon, it.tmdbId, it.year) })
-        }.also { index = it }
-    }
-
-    fun invalidateLibrary() {
-        index = null
-    }
 }

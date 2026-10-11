@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -102,9 +103,26 @@ fun PlayButton(
     }
 }
 
-/** One catalog version: language/quality tags and the provider's name, playable. */
+/** Extra line under a version: its portal details, or loading. */
+sealed interface VersionInfoLine {
+    data object Loading : VersionInfoLine
+    data class Text(val text: String) : VersionInfoLine
+}
+
+/**
+ * One catalog version: language/quality tags and the provider's name, playable. With [onInfo],
+ * an info button loads its portal details into [info].
+ */
 @Composable
-fun VersionRow(version: Version, best: Boolean, tuning: Boolean, enabled: Boolean, onPlay: () -> Unit) {
+fun VersionRow(
+    version: Version,
+    best: Boolean,
+    tuning: Boolean,
+    enabled: Boolean,
+    onPlay: () -> Unit,
+    info: VersionInfoLine? = null,
+    onInfo: (() -> Unit)? = null,
+) {
     ListItem(
         modifier = Modifier.clickable(enabled = enabled, onClickLabel = "Play ${version.name}", role = Role.Button, onClick = onPlay),
         headlineContent = {
@@ -115,12 +133,34 @@ fun VersionRow(version: Version, best: Boolean, tuning: Boolean, enabled: Boolea
             }
         },
         supportingContent = {
-            Text(version.name, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Column {
+                Text(version.name, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                when (info) {
+                    null -> Unit
+                    VersionInfoLine.Loading -> Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 1.5.dp)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Loading details…", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    is VersionInfoLine.Text -> Text(info.text, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                }
+            }
         },
         trailingContent = {
-            Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
-                if (tuning) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
-                else Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (onInfo != null && info == null) {
+                    androidx.compose.material3.IconButton(onClick = onInfo) {
+                        Icon(Icons.Outlined.Info, contentDescription = "Stream details for ${version.name}", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                } else if (onInfo != null && info is VersionInfoLine.Text) {
+                    androidx.compose.material3.IconButton(onClick = onInfo) {
+                        Icon(Icons.Outlined.Info, contentDescription = "Stream details for ${version.name}", tint = MaterialTheme.colorScheme.primary)
+                    }
+                }
+                Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+                    if (tuning) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+                    else Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                }
             }
         },
         colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
