@@ -347,9 +347,14 @@ interface CatalogDao {
     ): List<TitleRow>
 }
 
-@Database(entities = [TitleRow::class, GroupRow::class, ResolvedTitle::class], version = 5, exportSchema = false)
+@Database(
+    entities = [TitleRow::class, GroupRow::class, ResolvedTitle::class, WatchlistRow::class, WatchlistItemRow::class],
+    version = 6,
+    exportSchema = false,
+)
 abstract class CatalogDatabase : RoomDatabase() {
     abstract fun catalog(): CatalogDao
+    abstract fun watchlists(): WatchlistDao
 
     companion object {
         private val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -382,6 +387,21 @@ abstract class CatalogDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `watchlists` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, " +
+                        "`position` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `personId` INTEGER)",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `watchlist_items` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `listId` INTEGER NOT NULL, " +
+                        "`position` INTEGER NOT NULL, `kind` TEXT NOT NULL, `tmdbId` INTEGER NOT NULL, `title` TEXT NOT NULL, `year` INTEGER, " +
+                        "`posterPath` TEXT, `watched` INTEGER NOT NULL, `catalogName` TEXT, `addedAt` INTEGER NOT NULL)",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_watchlist_items_listId_position` ON `watchlist_items` (`listId`, `position`)")
+            }
+        }
+
         @Volatile private var instance: CatalogDatabase? = null
 
         fun get(context: Context): CatalogDatabase =
@@ -390,8 +410,10 @@ abstract class CatalogDatabase : RoomDatabase() {
                     context.applicationContext,
                     CatalogDatabase::class.java,
                     "guide.db",
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
-                    .fallbackToDestructiveMigration()
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                    // Every upgrade has a migration: watchlists are user data, unlike the catalog,
+                    // so the database is only rebuilt when an older build is installed over a newer one.
+                    .fallbackToDestructiveMigrationOnDowngrade()
                     .build()
                     .also { instance = it }
             }
