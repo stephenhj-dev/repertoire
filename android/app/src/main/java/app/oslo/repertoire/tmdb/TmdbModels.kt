@@ -73,6 +73,7 @@ data class TmdbTitleDetail(
     @SerialName("vote_count") val voteCount: Int = 0,
     val status: String? = null,
     @SerialName("created_by") val createdBy: List<TmdbCreator> = emptyList(),
+    val seasons: List<TmdbSeasonSummary> = emptyList(),
     val credits: TmdbCredits? = null,
     val videos: TmdbVideos? = null,
 ) {
@@ -180,6 +181,7 @@ object TmdbImages {
     fun poster(path: String?): String? = path?.takeIf { it.isNotBlank() }?.let { "${BASE}w342$it" }
     fun backdrop(path: String?): String? = path?.takeIf { it.isNotBlank() }?.let { "${BASE}w780$it" }
     fun profile(path: String?): String? = path?.takeIf { it.isNotBlank() }?.let { "${BASE}w185$it" }
+    fun still(path: String?): String? = path?.takeIf { it.isNotBlank() }?.let { "${BASE}w300$it" }
 }
 
 /** The YouTube trailer to show: official trailers first, then any trailer, then a teaser. */
@@ -198,4 +200,30 @@ data class TmdbMovieListItem(
     @SerialName("release_date") val releaseDate: String? = null,
     @SerialName("vote_count") val voteCount: Int = 0,
     @SerialName("vote_average") val voteAverage: Double = 0.0,
+)
+
+@Serializable
+data class TmdbSeasonSummary(
+    @SerialName("season_number") val seasonNumber: Int = 0,
+    val name: String? = null,
+    @SerialName("episode_count") val episodeCount: Int = 0,
+    @SerialName("poster_path") val posterPath: String? = null,
+)
+
+@Serializable
+data class TmdbEpisode(
+    @SerialName("season_number") val seasonNumber: Int = 0,
+    @SerialName("episode_number") val episodeNumber: Int = 0,
+    val name: String? = null,
+    val overview: String? = null,
+    val runtime: Int? = null,
+    @SerialName("still_path") val stillPath: String? = null,
+    @SerialName("air_date") val airDate: String? = null,
+)
+
+/** /tv/{id}/season/{n}. */
+@Serializable
+data class TmdbSeasonDetail(
+    @SerialName("season_number") val seasonNumber: Int = 0,
+    val episodes: List<TmdbEpisode> = emptyList(),
 )

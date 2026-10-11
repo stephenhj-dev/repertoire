@@ -111,6 +111,17 @@ object PortalCheck {
 data class XtreamTitleInfo(val tmdbId: Int?, val year: Int?)
 
 object XtreamInfo {
+    /** Raw get_series_info answer for one series. Blocking. */
+    fun seriesInfo(portal: String, username: String, password: String, seriesId: String): String {
+        val id = URLEncoder.encode(seriesId, Charsets.UTF_8.name())
+        val connection = PortalUrl.open(PortalUrl.action(portal, username, password, "get_series_info&series_id=$id"))
+        return try {
+            connection.inputStream.bufferedReader().use { it.readText() }
+        } finally {
+            connection.disconnect()
+        }
+    }
+
     /** Stream details for one catalog version. Blocking; null when the portal has none. */
     fun details(portal: String, username: String, password: String, kind: String, remoteId: String): VersionDetail? {
         val action = if (kind == "show") "get_series_info&series_id=" else "get_vod_info&vod_id="

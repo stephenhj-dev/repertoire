@@ -48,6 +48,10 @@ object Tmdb {
             TmdbPerson.serializer(),
         )
 
+    /** One season's episodes (titles, overviews, stills, runtimes). Cached like other details. */
+    suspend fun season(context: Context, tvId: Int, season: Int): TmdbSeasonDetail =
+        client(context).get("/tv/$tvId/season/$season", mapOf("language" to language), TmdbSeasonDetail.serializer())
+
     /** One page (20) of TMDB's top rated movies. Not persisted: the launch wall keeps its own list. */
     suspend fun topRatedMovies(context: Context, page: Int): List<TmdbMovieListItem> =
         client(context).get(

@@ -363,13 +363,14 @@ interface CatalogDao {
 }
 
 @Database(
-    entities = [TitleRow::class, GroupRow::class, ResolvedTitle::class, WatchlistRow::class, WatchlistItemRow::class],
-    version = 6,
+    entities = [TitleRow::class, GroupRow::class, ResolvedTitle::class, WatchlistRow::class, WatchlistItemRow::class, SeriesProgressRow::class],
+    version = 7,
     exportSchema = false,
 )
 abstract class CatalogDatabase : RoomDatabase() {
     abstract fun catalog(): CatalogDao
     abstract fun watchlists(): WatchlistDao
+    abstract fun seriesProgress(): SeriesProgressDao
 
     companion object {
         private val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -417,6 +418,16 @@ abstract class CatalogDatabase : RoomDatabase() {
             }
         }
 
+        /** v7: last played episode per series. */
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `series_progress` (`seriesKey` TEXT NOT NULL, `season` INTEGER NOT NULL, " +
+                        "`episode` INTEGER NOT NULL, `episodeTitle` TEXT, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`seriesKey`))",
+                )
+            }
+        }
+
         @Volatile private var instance: CatalogDatabase? = null
 
         fun get(context: Context): CatalogDatabase =
@@ -425,7 +436,7 @@ abstract class CatalogDatabase : RoomDatabase() {
                     context.applicationContext,
                     CatalogDatabase::class.java,
                     "guide.db",
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                     // Every upgrade has a migration: watchlists are user data, unlike the catalog,
                     // so the database is only rebuilt when an older build is installed over a newer one.
                     .fallbackToDestructiveMigrationOnDowngrade()
