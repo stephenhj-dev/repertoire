@@ -39,6 +39,16 @@ class AdbRemote(private val directory: File) {
         TiviMate.launch(TvShell { command -> runBlockingShell(host, command) }, packageName)
     }
 
+    /** Opens TiviMate's audio or subtitle picker on the TV and reads its choices. */
+    suspend fun openTracks(host: String, packageName: String, track: TiviMateScreens.Track): TrackPicker =
+        withContext(Dispatchers.IO) { tuner(host, packageName).openTracks(track) }
+
+    suspend fun chooseTrack(host: String, packageName: String, track: TiviMateScreens.Track, label: String): String =
+        withContext(Dispatchers.IO) { tuner(host, packageName).chooseTrack(track, label) }
+
+    private fun tuner(host: String, packageName: String) =
+        TiviMateTuner(TvShell { command -> runBlockingShell(host, command) }, packageName = packageName)
+
     private fun runBlockingShell(host: String, command: String): String = synchronized(this) {
         try {
             open(host).shell(command).allOutput

@@ -1,5 +1,8 @@
 package app.oslo.repertoire
 
+import app.oslo.repertoire.data.SeriesProgressRow
+import app.oslo.repertoire.tune.TiviMateScreens
+
 import android.app.Application
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -129,6 +132,14 @@ data class PlayQueue(
 @Immutable
 data class TuneState(val name: String, val step: String)
 
+/** The phone-side audio/subtitle picker mirroring TiviMate's track dialog on the TV. */
+data class TrackSheet(
+    val track: TiviMateScreens.Track,
+    val busy: Boolean,
+    val message: String = "",
+    val options: List<TiviMateScreens.TrackOption> = emptyList(),
+)
+
 /** One-shot message for a snackbar. [retry] names a title that can be tuned again. */
 data class UiMessage(val text: String, val retry: String? = null, val openDevices: Boolean = false)
 
@@ -238,6 +249,8 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
     var view by mutableStateOf(GuideView())
         private set
     var tune by mutableStateOf<TuneState?>(null)
+        private set
+    var trackSheet by mutableStateOf<TrackSheet?>(null)
         private set
     var favorites by mutableStateOf(favoritesStore.keys)
         private set
@@ -968,6 +981,135 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
                 }
             } finally {
                 tune = null
+            }
+        }
+    }
+
+    /**
+     * Plays one episode in TiviMate and remembers it as the series' last played episode.
+     * [series] is the provider's series name (what TiviMate lists); [progressKey] the Room key.
+     */
+    fun playEpisode(series: String, season: Int, episode: Int, title: String?, progressKey: String?) {
+        if (tvStore.host.isBlank()) {
+            notify("Choose a TV to play on", openDevices = true)
+            return
+        }
+        if (tune != null) {
+            notify("Still opening ${tune?.name}")
+            return
+        }
+        val label = "$series S$season E$episode"
+        tune = TuneState(label, "Connecting to $deviceName")
+        viewModelScope.launch {
+            try {
+                remoteGate.withLock {
+                    val host = tvStore.host
+                    val directory = getApplication<Application>().filesDir
+                    val reported = Handler(Looper.getMainLooper())
+                    val result = withContext(Dispatchers.IO) {
+                        TvAdb.playEpisode(directory, host, series, season, episode, title, tivimatePackage) { message ->
+                            reported.post {
+                                status = message
+                                if (tune?.name == label) tune = TuneState(label, message)
+                            }
+                        }
+                    }
+                    status = result
+                    val reached = result.startsWith("Playing") || "press OK" in result
+                    if (reached && progressKey != null) {
+                        withContext(Dispatchers.IO) {
+                            database.seriesProgress().save(
+                                SeriesProgressRow(progressKey, season, episode, title, System.currentTimeMillis()),
+                            )
+                        }
+                    }
+                    notify(if (result.startsWith("Playing")) "Now playing S$season E$episode on $deviceName" else result)
+                }
+            } finally {
+                tune = null
+            }
+        }
+    }
+
+    /** Remembers an episode as played without tuning (e.g. the user marks where they are). */
+    fun markEpisode(progressKey: String, season: Int, episode: Int, title: String?) {
+        viewModelScope.launch(Dispatchers.IO) {
+            database.seriesProgress().save(SeriesProgressRow(progressKey, season, episode, title, System.currentTimeMillis()))
+        }
+    }
+
+    /**
+     * Audio and subtitle buttons. TiviMate ignores KEYCODE_MEDIA_AUDIO_TRACK and
+     * KEYCODE_CAPTIONS, so this opens its player menu over ADB, picks the Audio track or CC
+     * entry, and mirrors the choices on the phone. Without ADB it opens the player menu with a
+     * long OK press so the user can finish on the TV.
+     */
+    fun openTracks(track: TiviMateScreens.Track) {
+        if (tvStore.host.isBlank()) {
+            notify("Choose a TV first", openDevices = true)
+            return
+        }
+        trackSheet = TrackSheet(track, busy = true, message = "Opening the menu on the TV")
+        viewModelScope.launch {
+            remoteGate.withLock {
+                val sheet = try {
+                    val picker = adbRemote.openTracks(tvStore.host, tivimatePackage, track)
+                    TrackSheet(track, busy = false, message = picker.message, options = picker.options)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    val fallback = runCatching {
+                        if (transport == NavTransport.RemoteV2) {
+                            remote.key(Keys.DPAD_CENTER, Keys.START_LONG)
+                            delay(650)
+                            remote.key(Keys.DPAD_CENTER, Keys.END_LONG)
+                            true
+                        } else {
+                            false
+                        }
+                    }.getOrDefault(false)
+                    TrackSheet(
+                        track,
+                        busy = false,
+                        message = if (fallback) {
+                            "Debugging isn't answering, so the player menu was opened on the TV. Choose ${if (track == TiviMateScreens.Track.Audio) "Audio track" else "CC"} there."
+                        } else {
+                            error.message ?: "Couldn't reach the TV"
+                        },
+                    )
+                }
+                if (trackSheet?.track == track) trackSheet = sheet
+            }
+        }
+    }
+
+    fun chooseTrack(label: String) {
+        val sheet = trackSheet ?: return
+        trackSheet = sheet.copy(busy = true, message = "Switching to $label")
+        viewModelScope.launch {
+            remoteGate.withLock {
+                val result = try {
+                    adbRemote.chooseTrack(tvStore.host, tivimatePackage, sheet.track, label)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    error.message ?: "Couldn't reach the TV"
+                }
+                trackSheet = null
+                notify(result)
+            }
+        }
+    }
+
+    /** Closes the phone sheet; also backs out of TiviMate's dialog if it is still open. */
+    fun dismissTracks(closeOnTv: Boolean) {
+        val sheet = trackSheet
+        trackSheet = null
+        if (closeOnTv && sheet != null && !sheet.busy && sheet.options.isNotEmpty()) {
+            send {
+                adbRemote.key(tvStore.host, Keys.BACK)
+                delay(300)
+                adbRemote.key(tvStore.host, Keys.BACK)
             }
         }
     }

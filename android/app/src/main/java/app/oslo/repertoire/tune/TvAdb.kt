@@ -51,14 +51,33 @@ object TvAdb {
         name: String,
         packageName: String = TiviMate.PLAYER,
         report: (String) -> Unit,
+    ): String = withTuner(directory, host, packageName, report) { it.play(name, report) }
+
+    /** Plays one episode of [series] (the provider's series name, as TiviMate lists it). */
+    fun playEpisode(
+        directory: File,
+        host: String,
+        series: String,
+        season: Int,
+        episode: Int,
+        title: String?,
+        packageName: String = TiviMate.PLAYER,
+        report: (String) -> Unit,
+    ): String = withTuner(directory, host, packageName, report) { it.playEpisode(series, season, episode, title, report) }
+
+    private fun withTuner(
+        directory: File,
+        host: String,
+        packageName: String,
+        report: (String) -> Unit,
+        block: (TiviMateTuner) -> String,
     ): String {
         val address = host.substringBefore(":").trim()
         if (address.isBlank()) return "Choose a TV on the Devices page first."
         report("Connecting to the TV. Allow this phone if it asks.")
         return try {
-            Dadb.create(address, TvPorts.ADB, keys(directory), 8_000, 45_000).use { dadb ->
-                TiviMateTuner(TvShell { command -> dadb.shell(command).allOutput }, packageName = packageName)
-                    .play(name, report)
+            Dadb.create(address, TvPorts.ADB, keys(directory), 8_000, 60_000).use { dadb ->
+                block(TiviMateTuner(TvShell { command -> dadb.shell(command).allOutput }, packageName = packageName))
             }
         } catch (error: Exception) {
             val text = error.message.orEmpty()

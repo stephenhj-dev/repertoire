@@ -66,6 +66,7 @@ import app.oslo.repertoire.GuideViewModel
 import app.oslo.repertoire.remote.Keys
 import app.oslo.repertoire.remote.NavTransport
 import app.oslo.repertoire.remote.TvStatus
+import app.oslo.repertoire.tune.TiviMateScreens
 import app.oslo.repertoire.ui.components.MessageCard
 import app.oslo.repertoire.ui.components.MessageTone
 import app.oslo.repertoire.ui.components.StatusDot
@@ -109,10 +110,10 @@ fun RemoteScreen(
         TopAppBar(
             title = { Text("Remote") },
             actions = {
-                IconButton(onClick = { model.tap(Keys.MEDIA_AUDIO_TRACK) }) {
+                IconButton(onClick = { model.openTracks(TiviMateScreens.Track.Audio) }) {
                     Icon(Icons.Rounded.Audiotrack, contentDescription = "Audio track")
                 }
-                IconButton(onClick = { model.tap(Keys.CAPTIONS) }) {
+                IconButton(onClick = { model.openTracks(TiviMateScreens.Track.Subtitles) }) {
                     Icon(Icons.Rounded.Subtitles, contentDescription = "Subtitles")
                 }
                 IconButton(onClick = { numpad = true }) {
@@ -229,6 +230,9 @@ fun RemoteScreen(
         ModalBottomSheet(onDismissRequest = { numpad = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
             NumberPad(onDigit = model::digit)
         }
+    }
+    model.trackSheet?.let { sheet ->
+        TrackChooser(sheet, onChoose = model::chooseTrack, onDismiss = model::dismissTracks)
     }
 }
 
