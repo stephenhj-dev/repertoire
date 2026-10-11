@@ -43,7 +43,11 @@ import androidx.compose.ui.unit.dp
 import app.oslo.repertoire.GuideViewModel
 import app.oslo.repertoire.R
 import app.oslo.repertoire.data.portalHost
+import android.content.Intent
+import android.net.Uri
 import app.oslo.repertoire.remote.NavTransport
+import app.oslo.repertoire.tmdb.Tmdb
+import app.oslo.repertoire.ui.details.TmdbMark
 import app.oslo.repertoire.remote.TvStatus
 import app.oslo.repertoire.ui.components.MessageCard
 import app.oslo.repertoire.ui.components.SectionHeader
@@ -216,6 +220,25 @@ fun SettingsScreen(
                         Text("${context.getString(R.string.app_tagline)}. Video plays on the TV; this phone is the guide and the remote.")
                     },
                     leadingContent = { Icon(Icons.Rounded.Info, contentDescription = null) },
+                    colors = itemColors,
+                )
+            }
+            item {
+                val context = LocalContext.current
+                ListItem(
+                    headlineContent = { Text("Movie and TV data from TMDB") },
+                    supportingContent = {
+                        Text(
+                            "This product uses the TMDB API but is not endorsed or certified by TMDB." +
+                                if (Tmdb.enabled) "" else "\nTMDB features are off in this build (no API token).",
+                        )
+                    },
+                    leadingContent = { TmdbMark(height = 20.dp) },
+                    modifier = Modifier.clickable(onClickLabel = "Open themoviedb.org") {
+                        runCatching {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.themoviedb.org/")))
+                        }
+                    },
                     colors = itemColors,
                 )
             }
