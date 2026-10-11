@@ -206,7 +206,12 @@ private fun NavGraphBuilder.mainGraph(model: GuideViewModel, nav: NavHostControl
             )
         }
         screen<SearchRoute> {
-            SearchScreen(model, onDetails = { nav.navigate(detailsOf(it)) }, bottomInset = bottom)
+            SearchScreen(
+                model,
+                onDetails = { nav.navigate(detailsOf(it)) },
+                onPerson = { nav.navigate(PersonRoute(it.id, it.name)) },
+                bottomInset = bottom,
+            )
         }
         screen<SettingsRoute> {
             SettingsScreen(

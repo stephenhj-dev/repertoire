@@ -18,6 +18,18 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import app.oslo.repertoire.tmdb.Tmdb
+import app.oslo.repertoire.tmdb.TmdbImages
+import app.oslo.repertoire.tmdb.TmdbPersonHit
+import app.oslo.repertoire.ui.details.ProfileImage
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -67,6 +79,7 @@ private enum class SearchPane { Start, Loading, Empty, Results }
 fun SearchScreen(
     model: GuideViewModel,
     onDetails: (GuideRow.Title) -> Unit,
+    onPerson: (TmdbPersonHit) -> Unit,
     bottomInset: PaddingValues,
 ) {
     val focus = remember { FocusRequester() }
@@ -83,7 +96,7 @@ fun SearchScreen(
                 .fillMaxWidth()
                 .padding(start = 16.dp, end = 16.dp, top = 12.dp)
                 .focusRequester(focus),
-            placeholder = { Text("Channels, movies, shows") },
+            placeholder = { Text(if (Tmdb.enabled) "Channels, movies, shows, people" else "Channels, movies, shows") },
             leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
             trailingIcon = {
                 if (model.searchText.isNotEmpty()) {
@@ -126,8 +139,8 @@ fun SearchScreen(
         }
         val pane = when {
             model.searchText.trim().length < 2 -> SearchPane.Start
-            model.searchResults.isEmpty() && model.searchBusy -> SearchPane.Loading
-            model.searchResults.isEmpty() -> SearchPane.Empty
+            model.searchResults.isEmpty() && model.peopleResults.isEmpty() && model.searchBusy -> SearchPane.Loading
+            model.searchResults.isEmpty() && model.peopleResults.isEmpty() -> SearchPane.Empty
             else -> SearchPane.Results
         }
         AnimatedContent(
@@ -152,6 +165,16 @@ fun SearchScreen(
                     Modifier.fillMaxSize().imePadding(),
                     contentPadding = PaddingValues(bottom = bottomInset.calculateBottomPadding() + 16.dp),
                 ) {
+                    if (model.peopleResults.isNotEmpty()) {
+                        item(key = "people-header") { SectionHeader("People") }
+                        item(key = "people") {
+                            PeopleRow(model.peopleResults) { person ->
+                                model.rememberSearch()
+                                keyboard?.hide()
+                                onPerson(person)
+                            }
+                        }
+                    }
                     guideRows(
                         rows = model.searchResults,
                         model = model,
@@ -208,6 +231,36 @@ private fun StartPane(model: GuideViewModel, bottomInset: PaddingValues) {
                 modifier = Modifier.clickable(onClickLabel = "Search for $text") { model.onSearchText(text) },
                 colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
             )
+        }
+    }
+}
+
+/** TMDB people as a horizontal row of portraits; tapping one opens their page. */
+@Composable
+private fun PeopleRow(people: List<TmdbPersonHit>, onPerson: (TmdbPersonHit) -> Unit) {
+    LazyRow(contentPadding = PaddingValues(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        items(people, key = { it.id }) { person ->
+            Column(
+                Modifier
+                    .width(96.dp)
+                    .clip(MaterialTheme.shapes.medium)
+                    .clickable(role = Role.Button, onClickLabel = "Open ${person.name}") { onPerson(person) }
+                    .padding(horizontal = 4.dp, vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                ProfileImage(TmdbImages.profile(person.profilePath), size = 68.dp)
+                Spacer(Modifier.height(6.dp))
+                Text(person.name, style = MaterialTheme.typography.labelLarge, maxLines = 2, textAlign = TextAlign.Center, overflow = TextOverflow.Ellipsis)
+                val known = when (person.knownForDepartment) {
+                    "Acting" -> "Actor"
+                    "Directing" -> "Director"
+                    null -> null
+                    else -> person.knownForDepartment
+                }
+                if (known != null) {
+                    Text(known, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                }
+            }
         }
     }
 }

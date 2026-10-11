@@ -20,6 +20,8 @@ import app.oslo.repertoire.data.countryLabel
 import app.oslo.repertoire.data.favoriteKey
 import app.oslo.repertoire.data.likeNeedle
 import app.oslo.repertoire.data.portalErrorMessage
+import app.oslo.repertoire.tmdb.Tmdb
+import app.oslo.repertoire.tmdb.TmdbPersonHit
 import app.oslo.repertoire.ui.theme.ThemeMode
 import androidx.compose.runtime.Immutable
 import kotlinx.coroutines.channels.Channel
@@ -172,7 +174,11 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var recentSearches by mutableStateOf(uiPrefs.recentSearches)
         private set
+    /** TMDB people matching the search text (All scope only, when TMDB is configured). */
+    var peopleResults by mutableStateOf<List<TmdbPersonHit>>(emptyList())
+        private set
     private var globalSearchJob: Job? = null
+    private var peopleJob: Job? = null
     private var reloadJob: Job? = null
 
     var devices by mutableStateOf(savedDevices())
@@ -507,7 +513,7 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
                     syncStep = friendlyStep(step)
                 }
                 meta.edit().putBoolean("iconsFetched", true).putBoolean("tmdbFieldsFetched", true).apply()
-                app.oslo.repertoire.tmdb.Tmdb.invalidateLibrary()
+                Tmdb.invalidateLibrary()
                 reload()
                 loadCounts()
                 if (searchText.isNotBlank()) runSearch()
@@ -801,6 +807,7 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
 
     fun onSearchText(value: String) {
         searchText = value
+        searchPeople()
         globalSearchJob?.cancel()
         if (value.trim().length < 2) {
             searchResults = emptyList()
@@ -818,6 +825,7 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
         if (scope == searchScope) return
         searchScope = scope
         runSearch()
+        searchPeople()
     }
 
     fun rememberSearch(text: String = searchText) {
@@ -830,6 +838,27 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
     fun clearRecentSearches() {
         recentSearches = emptyList()
         uiPrefs.recentSearches = emptyList()
+    }
+
+    /** Debounced TMDB person search; quietly empty on errors so catalog results still show. */
+    private fun searchPeople() {
+        peopleJob?.cancel()
+        val needle = searchText.trim()
+        if (!Tmdb.enabled || needle.length < 3 || searchScope != SearchScope.All) {
+            peopleResults = emptyList()
+            return
+        }
+        peopleJob = viewModelScope.launch {
+            delay(450)
+            val found = try {
+                Tmdb.searchPeople(getApplication(), needle).take(15)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                emptyList()
+            }
+            if (searchText.trim() == needle) peopleResults = found
+        }
     }
 
     private fun runSearch() {
