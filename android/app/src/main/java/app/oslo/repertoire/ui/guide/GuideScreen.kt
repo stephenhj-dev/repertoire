@@ -19,6 +19,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.material.icons.automirrored.rounded.ViewList
+import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -113,6 +119,14 @@ fun GuideScreen(
                 }
             },
             actions = {
+                if (hasPosterRows(view.rows)) {
+                    IconButton(onClick = { model.showPosterGrid(!model.posterGrid) }) {
+                        Icon(
+                            if (model.posterGrid) Icons.AutoMirrored.Rounded.ViewList else Icons.Rounded.GridView,
+                            contentDescription = if (model.posterGrid) "Show as list" else "Show as posters",
+                        )
+                    }
+                }
                 if (model.hasPortal) {
                     IconButton(onClick = model::refresh, enabled = !model.syncing) {
                         if (model.syncing) {
@@ -263,6 +277,29 @@ private fun GuideList(
             secondary = "Edit portal",
             onSecondary = onOpenPortal,
         )
+        model.posterGrid && hasPosterRows(view.rows) -> {
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(104.dp),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = bottomInset.calculateBottomPadding() + 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+            ) {
+                guideCells(
+                    rows = view.rows,
+                    model = model,
+                    onTitle = { model.playRow(it) },
+                    onBucket = { model.open(it) },
+                    onMore = { model.open(it) },
+                    onDetails = onDetails,
+                )
+                if (view.rows.isNotEmpty()) {
+                    item(key = "load-more", contentType = "load-more", span = { GridItemSpan(maxLineSpan) }) {
+                        LaunchedEffect(view.rows.size, view.key) { model.loadMore() }
+                    }
+                }
+            }
+        }
         else -> {
             val listState = rememberLazyListState()
             LazyColumn(

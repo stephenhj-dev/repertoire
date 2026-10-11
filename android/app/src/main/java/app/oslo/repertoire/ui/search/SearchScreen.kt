@@ -64,6 +64,8 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.foundation.layout.size
 import app.oslo.repertoire.GuideRow
 import app.oslo.repertoire.GuideViewModel
 import app.oslo.repertoire.SearchScope
@@ -72,6 +74,11 @@ import app.oslo.repertoire.ui.components.EmptyState
 import app.oslo.repertoire.ui.components.SectionHeader
 import app.oslo.repertoire.ui.components.SkeletonList
 import app.oslo.repertoire.ui.guide.guideRows
+import app.oslo.repertoire.ui.guide.guideCells
+import app.oslo.repertoire.ui.guide.hasPosterRows
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 
 private enum class SearchPane { Start, Loading, Empty, Results }
 
@@ -131,6 +138,14 @@ fun SearchScreen(
                     label = { Text(scope.label) },
                 )
             }
+            if (hasPosterRows(model.searchResults)) {
+                FilterChip(
+                    selected = model.posterGrid,
+                    onClick = { model.showPosterGrid(!model.posterGrid) },
+                    label = { Text("Posters") },
+                    leadingIcon = { Icon(Icons.Rounded.GridView, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                )
+            }
         }
         Box(Modifier.fillMaxWidth()) {
             if (model.searchBusy && model.searchResults.isNotEmpty()) {
@@ -161,7 +176,34 @@ fun SearchScreen(
                         "Nothing in ${model.searchScope.label.lowercase().takeIf { model.searchScope != SearchScope.All } ?: "your guide"} matches “${model.searchText.trim()}”. Try fewer letters."
                     },
                 )
-                SearchPane.Results -> LazyColumn(
+                SearchPane.Results -> if (model.posterGrid && hasPosterRows(model.searchResults)) {
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(104.dp),
+                        modifier = Modifier.fillMaxSize().imePadding(),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = bottomInset.calculateBottomPadding() + 24.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(18.dp),
+                    ) {
+                        if (model.peopleResults.isNotEmpty()) {
+                            item(key = "people-header", span = { GridItemSpan(maxLineSpan) }) { SectionHeader("People", Modifier.padding(start = 0.dp)) }
+                            item(key = "people", span = { GridItemSpan(maxLineSpan) }) {
+                                PeopleRow(model.peopleResults) { person ->
+                                    model.rememberSearch()
+                                    keyboard?.hide()
+                                    onPerson(person)
+                                }
+                            }
+                        }
+                        guideCells(
+                            rows = model.searchResults,
+                            model = model,
+                            onTitle = { model.rememberSearch(); keyboard?.hide(); model.playRow(it) },
+                            onBucket = {},
+                            onMore = { more -> model.selectScope(scopeFor(more.section)) },
+                            onDetails = { model.rememberSearch(); keyboard?.hide(); onDetails(it) },
+                        )
+                    }
+                } else LazyColumn(
                     Modifier.fillMaxSize().imePadding(),
                     contentPadding = PaddingValues(bottom = bottomInset.calculateBottomPadding() + 16.dp),
                 ) {
@@ -203,6 +245,12 @@ fun SearchScreen(
             }
         }
     }
+}
+
+private fun scopeFor(section: Section): SearchScope = when (section) {
+    Section.Movies -> SearchScope.Movies
+    Section.Series -> SearchScope.Shows
+    else -> SearchScope.Live
 }
 
 @Composable
