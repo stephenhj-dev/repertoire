@@ -20,6 +20,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         Index("kind", "groupCode"),
         Index("kind", "categoryId"),
         Index("kind", "name"),
+        Index("kind", "tmdbId"),
     ],
 )
 data class TitleRow(
@@ -50,6 +51,32 @@ data class LibraryRow(
     val tmdbId: Int?,
     val year: Int?,
 )
+
+/**
+ * What TMDB says a catalog movie/series name is, kept across catalog refreshes (keyed by kind and
+ * the provider's raw name, like favourites). [tmdbId] is null when TMDB had no confident match;
+ * such rows are retried after a while. Title, year and poster are TMDB's, for list display.
+ */
+@Entity(
+    tableName = "tmdb_resolved",
+    primaryKeys = ["kind", "name"],
+    indices = [Index("kind", "tmdbId")],
+)
+data class ResolvedTitle(
+    val kind: String,
+    val name: String,
+    val tmdbId: Int?,
+    val title: String?,
+    val year: Int?,
+    val posterPath: String?,
+    val checkedAt: Long,
+)
+
+/** A catalog movie/series that still needs a TMDB lookup. */
+data class PendingTitle(val kind: String, val name: String, val tmdbId: Int?, val year: Int?)
+
+/** A catalog name and the TMDB id it belongs to (from the portal or a lookup). */
+data class VersionName(val kind: String, val name: String, val tmdbId: Int)
 
 @Entity(tableName = "groups", primaryKeys = ["kind", "categoryId"])
 data class GroupRow(
@@ -83,8 +110,54 @@ interface CatalogDao {
     @Query("SELECT * FROM titles WHERE id = :id")
     suspend fun titleById(id: Long): TitleRow?
 
-    @Query("SELECT id, kind, name, icon, tmdbId, year FROM titles WHERE banner = 0 AND kind IN ('movie', 'show')")
+    @Query(
+        """
+        SELECT t.id AS id, t.kind AS kind, t.name AS name, t.icon AS icon,
+               COALESCE(t.tmdbId, r.tmdbId) AS tmdbId, t.year AS year
+        FROM titles t LEFT JOIN tmdb_resolved r ON r.kind = t.kind AND r.name = t.name
+        WHERE t.banner = 0 AND t.kind IN ('movie', 'show')
+        """,
+    )
     suspend fun libraryRows(): List<LibraryRow>
+
+    @Query("SELECT * FROM tmdb_resolved WHERE kind = :kind AND name IN (:names)")
+    suspend fun resolved(kind: String, names: List<String>): List<ResolvedTitle>
+
+    @androidx.room.Upsert
+    suspend fun saveResolved(rows: List<ResolvedTitle>)
+
+    /**
+     * Movies and series with no lookup yet, or whose "no match" is older than [retryBefore],
+     * one row per distinct name; portal TMDB ids first since they are one cheap request each.
+     */
+    @Query(
+        """
+        SELECT t.kind AS kind, t.name AS name, MAX(t.tmdbId) AS tmdbId, MAX(t.year) AS year
+        FROM titles t LEFT JOIN tmdb_resolved r ON r.kind = t.kind AND r.name = t.name
+        WHERE t.banner = 0 AND t.kind IN ('movie', 'show')
+          AND (r.name IS NULL OR (r.tmdbId IS NULL AND r.checkedAt < :retryBefore))
+        GROUP BY t.kind, t.name
+        ORDER BY MAX(t.tmdbId) IS NULL, t.kind, t.name
+        LIMIT :limit
+        """,
+    )
+    suspend fun pendingTitles(retryBefore: Long, limit: Int): List<PendingTitle>
+
+    /** Every catalog name for these TMDB ids, by the portal's id or a lookup. */
+    @Query(
+        """
+        SELECT kind, name, tmdbId FROM titles
+        WHERE banner = 0 AND kind = :kind AND tmdbId IN (:ids)
+        UNION
+        SELECT t.kind AS kind, t.name AS name, r.tmdbId AS tmdbId
+        FROM tmdb_resolved r JOIN titles t ON t.kind = r.kind AND t.name = r.name
+        WHERE r.kind = :kind AND r.tmdbId IN (:ids) AND t.banner = 0 AND t.tmdbId IS NULL
+        """,
+    )
+    suspend fun versionNames(kind: String, ids: List<Int>): List<VersionName>
+
+    @Query("SELECT * FROM titles WHERE banner = 0 AND kind = :kind AND name IN (:names)")
+    suspend fun titlesNamed(kind: String, names: List<String>): List<TitleRow>
 
     @Query("UPDATE titles SET tmdbId = :tmdbId WHERE id = :id")
     suspend fun setTmdbId(id: Long, tmdbId: Int)
@@ -274,7 +347,7 @@ interface CatalogDao {
     ): List<TitleRow>
 }
 
-@Database(entities = [TitleRow::class, GroupRow::class], version = 4, exportSchema = false)
+@Database(entities = [TitleRow::class, GroupRow::class, ResolvedTitle::class], version = 5, exportSchema = false)
 abstract class CatalogDatabase : RoomDatabase() {
     abstract fun catalog(): CatalogDao
 
@@ -298,6 +371,17 @@ abstract class CatalogDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_titles_kind_tmdbId` ON `titles` (`kind`, `tmdbId`)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `tmdb_resolved` (`kind` TEXT NOT NULL, `name` TEXT NOT NULL, `tmdbId` INTEGER, " +
+                        "`title` TEXT, `year` INTEGER, `posterPath` TEXT, `checkedAt` INTEGER NOT NULL, PRIMARY KEY(`kind`, `name`))",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_tmdb_resolved_kind_tmdbId` ON `tmdb_resolved` (`kind`, `tmdbId`)")
+            }
+        }
+
         @Volatile private var instance: CatalogDatabase? = null
 
         fun get(context: Context): CatalogDatabase =
@@ -306,7 +390,7 @@ abstract class CatalogDatabase : RoomDatabase() {
                     context.applicationContext,
                     CatalogDatabase::class.java,
                     "guide.db",
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .fallbackToDestructiveMigration()
                     .build()
                     .also { instance = it }

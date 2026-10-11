@@ -61,7 +61,15 @@ object Tmdb {
         ).results.filter { it.knownForDepartment != null || it.profilePath != null }
 
     /** Finds the TMDB id for a catalog title by name and year; null when nothing fits well. */
-    suspend fun searchTitle(context: Context, mediaType: String, parsed: ParsedTitle): Int? {
+    suspend fun searchTitle(context: Context, mediaType: String, parsed: ParsedTitle): Int? =
+        searchCandidate(context, mediaType, parsed)?.id
+
+    /** Title, year and poster only (no credits), for list display. */
+    suspend fun basic(context: Context, mediaType: String, id: Int): TmdbTitleDetail =
+        client(context).get("/$mediaType/$id", mapOf("language" to language), TmdbTitleDetail.serializer())
+
+    /** The confident TMDB search hit for a catalog title, with its title, year and poster. */
+    suspend fun searchCandidate(context: Context, mediaType: String, parsed: ParsedTitle): SearchCandidate? {
         suspend fun search(year: Int?): List<SearchCandidate> = client(context).get(
             "/search/$mediaType",
             mapOf(
@@ -72,9 +80,9 @@ object Tmdb {
             ),
             TmdbPage.serializer(TmdbSearchItem.serializer()),
         ).results.map { it.candidate() }
-        pickSearchResult(parsed, search(parsed.year))?.let { return it.id }
+        pickSearchResult(parsed, search(parsed.year))?.let { return it }
         // The portal's year is sometimes off by one or simply wrong; retry without it.
-        if (parsed.year != null) pickSearchResult(parsed, search(null))?.let { return it.id }
+        if (parsed.year != null) pickSearchResult(parsed, search(null))?.let { return it }
         return null
     }
 
@@ -84,6 +92,9 @@ object Tmdb {
      */
     suspend fun resolve(context: Context, row: TitleRow): Int? {
         row.tmdbId?.let { return it }
+        val dao = CatalogDatabase.get(context).catalog()
+        // A lookup made for the lists already answered this.
+        dao.resolved(row.kind, listOf(row.name)).firstOrNull()?.tmdbId?.let { return it }
         val mediaType = tmdbMediaType(row.kind)
         var year = row.year
         val login = PortalStore(context).load()

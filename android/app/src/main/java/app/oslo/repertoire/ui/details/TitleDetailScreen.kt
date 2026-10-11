@@ -62,7 +62,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.oslo.repertoire.GuideViewModel
 import app.oslo.repertoire.navigation.TitleDetailRoute
-import app.oslo.repertoire.tmdb.LibraryEntry
+import app.oslo.repertoire.library.TitleDisplay
+import app.oslo.repertoire.ui.components.VersionRow
 import app.oslo.repertoire.tmdb.TitleNormalizer
 import app.oslo.repertoire.tmdb.Tmdb
 import app.oslo.repertoire.tmdb.TmdbImages
@@ -95,7 +96,7 @@ fun TitleDetailScreen(
     val detail = state.detail
     val context = LocalContext.current
     val parsed = TitleNormalizer.parse(route.name)
-    val title = detail?.displayTitle ?: parsed.title
+    val title = detail?.displayTitle ?: TitleDisplay.cleanName(route.name)
     val primary = state.library.firstOrNull()
     val favoriteName = if (route.catalogId > 0) route.name else primary?.name
 
@@ -266,10 +267,11 @@ private fun Actions(
     onFavorite: () -> Unit,
     onTrailer: (String) -> Unit,
 ) {
-    val best = state.library.firstOrNull()
+    val versions = model.orderVersions(state.versions)
+    val best = versions.firstOrNull()
     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
         if (best != null) {
-            val tuning = model.tune?.name == best.name
+            val tuning = model.isTuning(state.versions)
             Button(
                 onClick = { model.play(best.name) },
                 enabled = model.tune == null,
@@ -279,7 +281,12 @@ private fun Actions(
                 if (tuning) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
                 else Icon(Icons.Rounded.PlayArrow, contentDescription = null)
                 Spacer(Modifier.width(10.dp))
-                Text("Play on ${model.deviceName}", style = MaterialTheme.typography.titleMedium)
+                Column {
+                    Text("Play on ${model.deviceName}", style = MaterialTheme.typography.titleMedium)
+                    if (versions.size > 1 && best.tags.label.isNotEmpty()) {
+                        Text(best.tags.label, style = MaterialTheme.typography.labelSmall)
+                    }
+                }
             }
         } else if (!state.loading && Tmdb.enabled) {
             Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.fillMaxWidth()) {
@@ -320,34 +327,47 @@ private fun Actions(
                 }
             }
         }
-        // Other versions of the same title in the catalog ("4K", other languages).
-        val others = state.library.drop(1)
-        if (others.isNotEmpty()) {
-            Spacer(Modifier.height(14.dp))
-            Text("Other versions", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(6.dp))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                others.take(8).forEach { entry -> VersionChip(entry, enabled = model.tune == null) { model.play(entry.name) } }
+        when {
+            versions.size == 1 -> {
+                Spacer(Modifier.height(10.dp))
+                ProviderName(versions.first().name)
+            }
+            versions.size > 1 -> {
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    "${versions.size} versions",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(2.dp))
+                Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+                    Column {
+                        versions.forEach { version ->
+                            VersionRow(
+                                version = version,
+                                best = version == best,
+                                tuning = model.tune?.name == version.name,
+                                enabled = model.tune == null,
+                                onPlay = { model.play(version.name) },
+                            )
+                        }
+                    }
+                }
             }
         }
     }
 }
 
+/** The raw catalog name, which is what TiviMate is searched for. */
 @Composable
-private fun VersionChip(entry: LibraryEntry, enabled: Boolean, onClick: () -> Unit) {
-    Surface(
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        onClick = onClick,
-        enabled = enabled,
-    ) {
-        Row(Modifier.padding(start = 8.dp, end = 12.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(4.dp))
-            Text(entry.name, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-    }
+private fun ProviderName(name: String) {
+    Text(
+        "Provider name: $name",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+    )
 }
 
 private fun androidx.compose.foundation.lazy.LazyListScope.detailSections(

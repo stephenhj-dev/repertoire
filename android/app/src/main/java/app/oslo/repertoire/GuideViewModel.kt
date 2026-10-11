@@ -21,7 +21,21 @@ import app.oslo.repertoire.data.favoriteKey
 import app.oslo.repertoire.data.likeNeedle
 import app.oslo.repertoire.data.portalErrorMessage
 import app.oslo.repertoire.tmdb.Tmdb
+import app.oslo.repertoire.tmdb.TitleResolver
+import app.oslo.repertoire.tmdb.TmdbImages
 import app.oslo.repertoire.tmdb.TmdbPersonHit
+import app.oslo.repertoire.data.PendingTitle
+import app.oslo.repertoire.data.ResolvedTitle
+import app.oslo.repertoire.library.CatalogItem
+import app.oslo.repertoire.library.PlaybackPrefs
+import app.oslo.repertoire.library.ResolvedInfo
+import app.oslo.repertoire.library.TitleGrouping
+import app.oslo.repertoire.library.Version
+import app.oslo.repertoire.library.VersionPicker
+import app.oslo.repertoire.library.VersionTagParser
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.collectLatest
 import app.oslo.repertoire.ui.theme.ThemeMode
 import androidx.compose.runtime.Immutable
 import kotlinx.coroutines.channels.Channel
@@ -63,13 +77,27 @@ enum class SearchScope(val kind: String?, val label: String) {
 @Immutable
 sealed interface GuideRow {
     data class Bucket(val id: String, val label: String, val count: Int, val kind: BucketKind) : GuideRow
+    /**
+     * A channel, or a movie/series row. For movies and series [name] is the raw provider name of
+     * the listed entry; [display]/[year]/[icon] are TMDB's when matched, and [versions] holds the
+     * raw names of every catalog version of the title (played by preference).
+     */
     data class Title(
         val kind: String,
         val name: String,
         val caption: String = "",
         val id: Long = 0,
         val icon: String? = null,
-    ) : GuideRow
+        val tmdbId: Int? = null,
+        val year: Int? = null,
+        val display: String = name,
+        val versions: List<String> = emptyList(),
+        val badges: String = "",
+        val moreVersions: String? = null,
+        val matched: Boolean = false,
+    ) : GuideRow {
+        val playable: List<String> get() = versions.ifEmpty { listOf(name) }
+    }
     data class Banner(val name: String) : GuideRow
     data class More(val section: Section, val label: String) : GuideRow
     data class Note(val text: String) : GuideRow
@@ -130,6 +158,21 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var dynamicColor by mutableStateOf(uiPrefs.dynamicColor)
         private set
+
+    /** Preferred audio language (device language unless set, EN as the fallback) and 4K preference. */
+    var playbackPrefs by mutableStateOf(
+        PlaybackPrefs(
+            uiPrefs.audioLanguage ?: VersionTagParser.languageForLocale(java.util.Locale.getDefault().language),
+            uiPrefs.prefer4k,
+        ),
+    )
+        private set
+    val audioLanguageIsDevice: Boolean get() = uiPrefs.audioLanguage == null
+
+    private val resolver = TitleResolver(app, viewModelScope)
+    /** The current Guide list before grouping (titles one per catalog entry), for re-grouping. */
+    private var rawRows: List<GuideRow> = emptyList()
+    private var rawSearch: List<GuideRow> = emptyList()
 
     /** Shown on first launch until a portal and a TV are set, or the user skips setup. */
     val setupNeeded: Boolean = !uiPrefs.setupDone && (portalStore.load() == null || tvStore.host.isBlank())
@@ -241,6 +284,11 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
         remote.rememberHost(host)
         remote.onSessionLost = { scheduleReconnect() }
         if (paired && tvStore.keepConnected) connect()
+        resolver.start()
+        viewModelScope.launch {
+            @OptIn(FlowPreview::class)
+            resolver.updates.debounce(1_200).collectLatest { regroup() }
+        }
         viewModelScope.launch {
             if (!meta.getBoolean("sectionsBackfilled", false)) {
                 runCatching { sync.backfillSections() }
@@ -275,6 +323,35 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
         dynamicColor = on
         uiPrefs.dynamicColor = on
     }
+
+    /** [language] null follows the device language. */
+    fun setAudioLanguage(language: String?) {
+        uiPrefs.audioLanguage = language
+        playbackPrefs = playbackPrefs.copy(language = language ?: VersionTagParser.languageForLocale(java.util.Locale.getDefault().language))
+        regroup()
+    }
+
+    fun setPrefer4k(on: Boolean) {
+        uiPrefs.prefer4k = on
+        playbackPrefs = playbackPrefs.copy(prefer4k = on)
+    }
+
+    /** Catalog versions best first for the user's preferences. */
+    fun orderVersions(names: List<String>): List<Version> = VersionPicker.order(names.distinct().map(::Version), playbackPrefs)
+
+    /** Plays a list row: channels by name, movies/series in the preferred version. */
+    fun playRow(row: GuideRow.Title) {
+        if (row.kind == "live") return play(row.name)
+        playBest(row.playable)
+    }
+
+    fun playBest(names: List<String>) {
+        val best = orderVersions(names).firstOrNull() ?: return
+        play(best.name)
+    }
+
+    /** True while any of these names is being tuned. */
+    fun isTuning(names: List<String>): Boolean = tune?.name?.let { it in names } == true
 
     fun finishSetup() {
         uiPrefs.setupDone = true
@@ -406,7 +483,7 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
                 drilled = true
                 reload()
             }
-            is GuideRow.Title -> play(row.name)
+            is GuideRow.Title -> playRow(row)
             is GuideRow.More -> select(row.section)
             is GuideRow.Banner, is GuideRow.Note -> Unit
         }
@@ -439,7 +516,8 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
         loadingMore = true
         viewModelScope.launch {
             val more = nextPage(place)
-            rows = rows + more
+            rawRows = rawRows + more
+            rows = present(rawRows)
             view = view.copy(rows = rows)
             loadingMore = false
         }
@@ -514,6 +592,7 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 meta.edit().putBoolean("iconsFetched", true).putBoolean("tmdbFieldsFetched", true).apply()
                 Tmdb.invalidateLibrary()
+                resolver.catalogChanged()
                 reload()
                 loadCounts()
                 if (searchText.isNotBlank()) runSearch()
@@ -876,7 +955,7 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
         searchBusy = true
         val like = likeNeedle(needle)
         val scope = searchScope
-        searchResults = if (scope == SearchScope.All) {
+        rawSearch = if (scope == SearchScope.All) {
             val groups = listOf(
                 Triple("live", "Live TV", Section.Tv),
                 Triple("movie", "Movies", Section.Movies),
@@ -889,6 +968,7 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
         } else {
             database.catalog().search(scope.kind, null, null, like, needle, 120).map { it.toTitle(captionFor(it.kind)) }
         }
+        searchResults = present(rawSearch)
         searchBusy = false
     }
 
@@ -901,7 +981,8 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
         reloadJob?.cancel()
         reloadJob = viewModelScope.launch {
             loading = true
-            val loaded = load()
+            rawRows = load()
+            val loaded = present(rawRows)
             val place = drill
             rows = loaded
             depth = when {
@@ -928,7 +1009,95 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun TitleRow.toTitle(caption: String = "") =
-        GuideRow.Title(kind = kind, name = name, caption = caption, id = id, icon = icon)
+        GuideRow.Title(kind = kind, name = name, caption = caption, id = id, icon = icon, tmdbId = tmdbId, year = year)
+
+    /** Re-groups what is on screen after new TMDB lookups or a preference change. */
+    private fun regroup() {
+        viewModelScope.launch {
+            if (rawRows.any { it is GuideRow.Title && it.kind != "live" }) {
+                val again = present(rawRows)
+                rows = again
+                view = view.copy(rows = again)
+            }
+            if (rawSearch.any { it is GuideRow.Title && it.kind != "live" }) searchResults = present(rawSearch)
+        }
+    }
+
+    /**
+     * Turns raw catalog rows into list rows: movies/series that are the same TMDB title become one
+     * row with TMDB's title, year and poster plus version badges; unmatched ones keep a cleaned
+     * name. Titles never looked up are queued for the resolver. Channels pass through.
+     */
+    private suspend fun present(raw: List<GuideRow>): List<GuideRow> {
+        val titles = raw.filterIsInstance<GuideRow.Title>().filter { it.kind != "live" }
+        if (titles.isEmpty()) return raw
+        val dao = database.catalog()
+        val resolved = HashMap<Pair<String, String>, ResolvedTitle>()
+        val versions = HashMap<Pair<String, Int>, MutableList<String>>()
+        try {
+            titles.groupBy { it.kind }.forEach { (kind, list) ->
+                list.map { it.name }.distinct().chunked(500).forEach { names ->
+                    dao.resolved(kind, names).forEach { resolved[kind to it.name] = it }
+                }
+                val ids = list.mapNotNull { it.tmdbId ?: resolved[kind to it.name]?.tmdbId }.distinct()
+                ids.chunked(500).forEach { chunk ->
+                    dao.versionNames(kind, chunk).forEach { versions.getOrPut(kind to it.tmdbId) { mutableListOf() } += it.name }
+                }
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            // Lookups are an extra; show plain rows if they fail.
+        }
+        resolver.request(
+            titles.filter { resolved[it.kind to it.name] == null }
+                .map { PendingTitle(it.kind, it.name, it.tmdbId, it.year) },
+        )
+        val out = ArrayList<GuideRow>(raw.size)
+        val run = ArrayList<GuideRow.Title>()
+        fun flush() {
+            if (run.isEmpty()) return
+            val byId = run.associateBy { it.id }
+            val items = run.map { row ->
+                val r = resolved[row.kind to row.name]
+                CatalogItem(
+                    id = row.id,
+                    kind = row.kind,
+                    name = row.name,
+                    icon = row.icon,
+                    year = row.year,
+                    portalTmdbId = row.tmdbId,
+                    resolved = r?.let { ResolvedInfo(it.tmdbId, it.title, it.year, TmdbImages.poster(it.posterPath)) },
+                )
+            }
+            TitleGrouping.group(items, versions).forEach { group ->
+                val source = byId.getValue(group.representative.id)
+                val summary = VersionPicker.summary(group.versions.map(::Version), playbackPrefs.language)
+                out += source.copy(
+                    tmdbId = group.tmdbId,
+                    year = group.display.year,
+                    display = group.display.title,
+                    icon = group.display.poster,
+                    versions = group.versions,
+                    badges = summary.line,
+                    moreVersions = summary.moreVersions,
+                    matched = group.display.matched,
+                )
+            }
+            run.clear()
+        }
+        for (row in raw) {
+            if (row is GuideRow.Title && row.kind != "live") {
+                if (run.isNotEmpty() && run.first().kind != row.kind) flush()
+                run += row
+            } else {
+                flush()
+                out += row
+            }
+        }
+        flush()
+        return out
+    }
 
     private suspend fun load(): List<GuideRow> {
         pageOffset = 0

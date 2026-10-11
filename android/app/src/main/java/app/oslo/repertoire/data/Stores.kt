@@ -128,6 +128,15 @@ class UiPrefs(context: Context) {
         get() = preferences.getBoolean("setupDone", false)
         set(value) { preferences.edit().putBoolean("setupDone", value).apply() }
 
+    /** Preferred audio language code ("EN", "FR"); null = follow the device language. */
+    var audioLanguage: String?
+        get() = preferences.getString("audioLanguage", null)
+        set(value) { preferences.edit().putString("audioLanguage", value).apply() }
+
+    var prefer4k: Boolean
+        get() = preferences.getBoolean("prefer4k", false)
+        set(value) { preferences.edit().putBoolean("prefer4k", value).apply() }
+
     var recentSearches: List<String>
         get() = preferences.getString("recentSearches", "").orEmpty().split('\n').filter { it.isNotBlank() }
         set(value) { preferences.edit().putString("recentSearches", value.take(8).joinToString("\n")).apply() }

@@ -62,7 +62,12 @@ class TmdbCache(private val directory: File?, private val ttlMs: Long = 7L * 24 
 }
 
 /** Minimal TMDB v3 client over HttpURLConnection (like the Xtream code), authenticated with a v4 read token. */
-class TmdbClient(private val token: String, private val cache: TmdbCache) {
+class TmdbClient(
+    private val token: String,
+    private val cache: TmdbCache,
+    /** Network requests only; cache hits are free. ~16 requests a second at most. */
+    private val limiter: RateLimiter = RateLimiter(60),
+) {
     val enabled: Boolean get() = token.isNotBlank()
 
     private val json = Json {
@@ -83,7 +88,10 @@ class TmdbClient(private val token: String, private val cache: TmdbCache) {
             .sortedBy { it.key }
             .joinToString("&") { "${it.key}=${URLEncoder.encode(it.value, "UTF-8")}" }
         val url = "$BASE$path" + if (query.isEmpty()) "" else "?$query"
-        val body = cache.get(url) ?: fetch(url).also { cache.put(url, it, persist) }
+        val body = cache.get(url) ?: run {
+            limiter.acquire()
+            fetch(url).also { cache.put(url, it, persist) }
+        }
         json.decodeFromString(serializer, body)
     }
 

@@ -152,3 +152,40 @@ class TitleDisplayTest {
         assertEquals("US: HBO HD", TitleDisplay.of("live", "US: HBO HD").title)
     }
 }
+
+class TitleGroupingTest {
+    private val heat = app.oslo.repertoire.library.ResolvedInfo(949, "Heat", 1995, "poster")
+
+    @Test
+    fun groupsVersionsOfTheSameTmdbTitle() {
+        val items = listOf(
+            app.oslo.repertoire.library.CatalogItem(1, "movie", "EN - Heat (1995)", resolved = heat),
+            app.oslo.repertoire.library.CatalogItem(2, "movie", "Alien"),
+            app.oslo.repertoire.library.CatalogItem(3, "movie", "FR - Heat", portalTmdbId = 949),
+            app.oslo.repertoire.library.CatalogItem(4, "show", "Heat", portalTmdbId = 949),
+        )
+        val rows = app.oslo.repertoire.library.TitleGrouping.group(items, mapOf(("movie" to 949) to listOf("DE - Heat 4K", "FR - Heat")))
+        assertEquals(3, rows.size)
+        assertEquals("Heat", rows[0].display.title)
+        assertEquals("poster", rows[0].display.poster)
+        assertTrue(rows[0].display.matched)
+        assertEquals(listOf("EN - Heat (1995)", "FR - Heat", "DE - Heat 4K"), rows[0].versions)
+        assertEquals("Alien", rows[1].display.title)
+        assertNull(rows[1].tmdbId)
+        // A series with the same number is another title.
+        assertEquals("show", rows[2].representative.kind)
+    }
+
+    @Test
+    fun unmatchedEntriesStaySeparate() {
+        val none = app.oslo.repertoire.library.ResolvedInfo(null)
+        val items = listOf(
+            app.oslo.repertoire.library.CatalogItem(1, "movie", "EN - Obscure Film", resolved = none),
+            app.oslo.repertoire.library.CatalogItem(2, "movie", "FR - Obscure Film", resolved = none),
+        )
+        val rows = app.oslo.repertoire.library.TitleGrouping.group(items)
+        assertEquals(2, rows.size)
+        assertEquals("Obscure Film", rows[1].display.title)
+        assertFalse(rows[1].display.matched)
+    }
+}

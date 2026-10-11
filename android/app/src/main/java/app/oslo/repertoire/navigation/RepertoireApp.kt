@@ -190,6 +190,7 @@ private fun detailsOf(row: GuideRow.Title) = TitleDetailRoute(
     name = row.name,
     catalogId = row.id,
     icon = row.icon,
+    tmdbId = row.tmdbId,
 )
 
 private fun NavGraphBuilder.mainGraph(model: GuideViewModel, nav: NavHostController, tv: app.oslo.repertoire.remote.TvStatus, bottom: PaddingValues) {

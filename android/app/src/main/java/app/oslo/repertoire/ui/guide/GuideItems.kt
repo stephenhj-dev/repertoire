@@ -33,7 +33,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.oslo.repertoire.BucketKind
 import app.oslo.repertoire.GuideRow
+import app.oslo.repertoire.data.DisplayName
 import app.oslo.repertoire.data.splitDisplayName
+import app.oslo.repertoire.ui.components.PlayButton
 import app.oslo.repertoire.ui.components.ChannelLogo
 import app.oslo.repertoire.ui.components.CodeBadge
 import app.oslo.repertoire.ui.components.IconBadge
@@ -67,7 +69,8 @@ fun BucketListItem(row: GuideRow.Bucket, onClick: () -> Unit, modifier: Modifier
 
 /**
  * A channel, movie or show; the star saves it. Channels play on the TV when tapped. Movies and
- * shows open their detail page instead and keep a quick play button.
+ * shows open their detail page instead and keep a quick play button (preferred version; long
+ * press to choose). They show TMDB's title, year and poster when matched, plus version badges.
  */
 @Composable
 fun TitleListItem(
@@ -78,10 +81,16 @@ fun TitleListItem(
     onFavorite: () -> Unit,
     onDetails: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    onChooseVersion: (() -> Unit)? = null,
 ) {
-    val name = splitDisplayName(row.name, row.kind)
-    val overline = listOfNotNull(name.tag, row.caption.takeIf { it.isNotBlank() }).joinToString(" · ")
-    val poster = row.kind != "live"
+    val live = row.kind == "live"
+    val name = if (live) splitDisplayName(row.name, row.kind) else DisplayName(null, row.display)
+    val overline = listOfNotNull(
+        name.tag,
+        row.caption.takeIf { it.isNotBlank() },
+        row.year?.takeIf { !live }?.toString(),
+    ).joinToString(" · ")
+    val poster = !live
     ListItem(
         modifier = modifier
             .then(
@@ -95,6 +104,28 @@ fun TitleListItem(
             ),
         overlineContent = if (overline.isNotEmpty()) ({ Text(overline, maxLines = 1) }) else null,
         headlineContent = { Text(name.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+        supportingContent = if (!live && (row.badges.isNotEmpty() || row.moreVersions != null)) ({
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (row.badges.isNotEmpty()) {
+                    Text(
+                        row.badges,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                }
+                row.moreVersions?.let {
+                    Text(
+                        (if (row.badges.isNotEmpty()) "  " else "") + it,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
+            }
+        }) else null,
         leadingContent = {
             ChannelLogo(
                 url = row.icon,
@@ -114,15 +145,13 @@ fun TitleListItem(
                     )
                 }
                 if (onDetails != null || tuning) {
-                    Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                        if (tuning) {
-                            CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.5.dp)
-                        } else {
-                            FilledTonalIconButton(onClick = onPlay, modifier = Modifier.size(40.dp)) {
-                                Icon(Icons.Rounded.PlayArrow, contentDescription = "Play on TV")
-                            }
-                        }
-                    }
+                    PlayButton(
+                        tuning = tuning,
+                        enabled = true,
+                        label = "Play on TV",
+                        onPlay = onPlay,
+                        onLongPress = onChooseVersion,
+                    )
                 }
             }
         },

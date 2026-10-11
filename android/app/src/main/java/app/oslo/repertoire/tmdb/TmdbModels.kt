@@ -100,6 +100,7 @@ data class TmdbSearchItem(
         originalTitle = originalTitle ?: originalName,
         year = TitleNormalizer.yearOf(releaseDate ?: firstAirDate),
         popularity = popularity,
+        posterPath = posterPath,
     )
 }
 

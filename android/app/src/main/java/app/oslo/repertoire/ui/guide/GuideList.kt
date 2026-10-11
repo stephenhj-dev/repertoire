@@ -10,6 +10,11 @@ import androidx.compose.foundation.layout.padding
 import app.oslo.repertoire.GuideRow
 import app.oslo.repertoire.GuideViewModel
 import app.oslo.repertoire.ui.components.SectionHeader
+import app.oslo.repertoire.ui.components.VersionChooserSheet
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 
 /** Stable keys: catalog ids for titles, ids for buckets; banners/notes fall back to position. */
 internal fun rowKey(index: Int, row: GuideRow): String = when (row) {
@@ -39,15 +44,29 @@ internal fun LazyListScope.guideRows(
 ) {
     itemsIndexed(rows, key = { index, row -> rowKey(index, row) }, contentType = { _, row -> rowType(row) }) { _, row ->
         when (row) {
-            is GuideRow.Title -> TitleListItem(
-                row = row,
-                favorite = model.isFavorite(row.kind, row.name),
-                tuning = model.tune?.name == row.name,
-                onPlay = { onTitle(row) },
-                onFavorite = { model.toggleFavorite(row.kind, row.name) },
-                onDetails = if (row.kind != "live") ({ onDetails(row) }) else null,
-                modifier = Modifier.animateItem(),
-            )
+            is GuideRow.Title -> {
+                var choosing by remember { mutableStateOf(false) }
+                TitleListItem(
+                    row = row,
+                    favorite = model.isFavorite(row.kind, row.name),
+                    tuning = model.isTuning(row.playable),
+                    onPlay = { onTitle(row) },
+                    onFavorite = { model.toggleFavorite(row.kind, row.name) },
+                    onDetails = if (row.kind != "live") ({ onDetails(row) }) else null,
+                    modifier = Modifier.animateItem(),
+                    onChooseVersion = if (row.kind != "live") ({ choosing = true }) else null,
+                )
+                if (choosing) {
+                    VersionChooserSheet(
+                        title = row.display,
+                        versions = model.orderVersions(row.playable),
+                        tuningName = model.tune?.name,
+                        enabled = model.tune == null,
+                        onPlay = { model.play(it.name) },
+                        onDismiss = { choosing = false },
+                    )
+                }
+            }
             is GuideRow.Bucket -> BucketListItem(row, onClick = { onBucket(row) }, modifier = Modifier.animateItem())
             is GuideRow.Banner -> SectionHeader(row.name)
             is GuideRow.More -> MoreItem(row.label) { onMore(row) }

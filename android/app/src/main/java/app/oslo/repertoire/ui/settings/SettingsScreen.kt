@@ -35,6 +35,19 @@ import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.rounded.HighQuality
+import androidx.compose.material.icons.rounded.Translate
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.Alignment
+import app.oslo.repertoire.library.VersionTagParser
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -159,6 +172,44 @@ fun SettingsScreen(
                 )
             }
 
+            item { SectionHeader("Playback") }
+            item {
+                var choosing by remember { mutableStateOf(false) }
+                val code = model.playbackPrefs.language
+                ListItem(
+                    headlineContent = { Text("Preferred audio language") },
+                    supportingContent = {
+                        Text(
+                            languageName(code) + (if (model.audioLanguageIsDevice) " (device language)" else "") +
+                                ". Play picks this version when a title has several; English otherwise.",
+                        )
+                    },
+                    leadingContent = { Icon(Icons.Rounded.Translate, contentDescription = null) },
+                    modifier = Modifier.clickable(onClickLabel = "Change language") { choosing = true },
+                    colors = itemColors,
+                )
+                if (choosing) {
+                    LanguageDialog(
+                        current = if (model.audioLanguageIsDevice) null else code,
+                        onPick = {
+                            model.setAudioLanguage(it)
+                            choosing = false
+                        },
+                        onDismiss = { choosing = false },
+                    )
+                }
+            }
+            item {
+                ListItem(
+                    headlineContent = { Text("Prefer 4K") },
+                    supportingContent = { Text("Pick 4K/UHD versions first. Off: Full HD first, which streams more reliably.") },
+                    leadingContent = { Icon(Icons.Rounded.HighQuality, contentDescription = null) },
+                    trailingContent = { Switch(checked = model.playbackPrefs.prefer4k, onCheckedChange = null) },
+                    modifier = Modifier.clickable(role = Role.Switch) { model.setPrefer4k(!model.playbackPrefs.prefer4k) },
+                    colors = itemColors,
+                )
+            }
+
             item { SectionHeader("Appearance") }
             item {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -243,6 +294,42 @@ fun SettingsScreen(
                 )
             }
         }
+    }
+}
+
+private fun languageName(code: String): String =
+    java.util.Locale(code.lowercase()).getDisplayLanguage(java.util.Locale.ENGLISH).ifBlank { code } + " ($code)"
+
+@Composable
+private fun LanguageDialog(current: String?, onPick: (String?) -> Unit, onDismiss: () -> Unit) {
+    val device = VersionTagParser.languageForLocale(java.util.Locale.getDefault().language)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Preferred audio language") },
+        text = {
+            LazyColumn {
+                item {
+                    LanguageOption("Device language · ${languageName(device)}", current == null) { onPick(null) }
+                }
+                items(VersionTagParser.SETTING_LANGUAGES.size) { index ->
+                    val code = VersionTagParser.SETTING_LANGUAGES[index]
+                    LanguageOption(languageName(code), current == code) { onPick(code) }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun LanguageOption(label: String, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable(role = Role.RadioButton, onClick = onClick).padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = selected, onClick = null)
+        Spacer(Modifier.width(12.dp))
+        Text(label, style = MaterialTheme.typography.bodyLarge)
     }
 }
 

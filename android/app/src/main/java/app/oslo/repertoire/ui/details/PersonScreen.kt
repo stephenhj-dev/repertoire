@@ -63,6 +63,14 @@ import app.oslo.repertoire.ui.components.EmptyState
 import app.oslo.repertoire.ui.components.MessageCard
 import app.oslo.repertoire.ui.components.SectionHeader
 import app.oslo.repertoire.ui.components.SkeletonList
+import app.oslo.repertoire.ui.components.PlayButton
+import app.oslo.repertoire.ui.components.VersionChooserSheet
+import app.oslo.repertoire.library.Version
+import app.oslo.repertoire.library.VersionPicker
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 
 /** Where a filmography entry leads: its title page, linked to the catalog when we have it. */
 fun PersonCredit.detailRoute(): TitleDetailRoute {
@@ -296,20 +304,30 @@ private fun CreditRow(model: GuideViewModel, entry: PersonCredit, onOpen: () -> 
             }
             if (entry.inLibrary) {
                 Spacer(Modifier.height(6.dp))
-                LibraryBadge()
+                val badges = VersionPicker.summary(entry.library.map { Version(it.name) }, model.playbackPrefs.language).line
+                LibraryBadge(label = if (badges.isEmpty()) "In your library" else "In your library · $badges")
             }
         }
         if (best != null) {
             Spacer(Modifier.width(8.dp))
-            val tuning = model.tune?.name == best.name
-            Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                if (tuning) {
-                    CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.5.dp)
-                } else {
-                    FilledTonalIconButton(onClick = { model.play(best.name) }, enabled = model.tune == null) {
-                        Icon(Icons.Rounded.PlayArrow, contentDescription = "Play ${credit.title} on TV")
-                    }
-                }
+            val names = entry.library.map { it.name }
+            var choosing by remember { mutableStateOf(false) }
+            PlayButton(
+                tuning = model.isTuning(names),
+                enabled = model.tune == null,
+                label = "Play ${credit.title} on TV",
+                onPlay = { model.playBest(names) },
+                onLongPress = { choosing = true },
+            )
+            if (choosing) {
+                VersionChooserSheet(
+                    title = credit.title,
+                    versions = model.orderVersions(names),
+                    tuningName = model.tune?.name,
+                    enabled = model.tune == null,
+                    onPlay = { model.play(it.name) },
+                    onDismiss = { choosing = false },
+                )
             }
         }
     }

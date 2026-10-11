@@ -273,7 +273,7 @@ private fun GuideList(
                 guideRows(
                     rows = view.rows,
                     model = model,
-                    onTitle = { model.play(it.name) },
+                    onTitle = { model.playRow(it) },
                     onBucket = { model.open(it) },
                     onMore = { model.open(it) },
                     onDetails = onDetails,

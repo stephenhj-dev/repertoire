@@ -78,6 +78,7 @@ data class SearchCandidate(
     val originalTitle: String? = null,
     val year: Int? = null,
     val popularity: Double = 0.0,
+    val posterPath: String? = null,
 )
 
 /**

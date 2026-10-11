@@ -181,7 +181,7 @@ fun SearchScreen(
                         onTitle = {
                             model.rememberSearch()
                             keyboard?.hide()
-                            model.play(it.name)
+                            model.playRow(it)
                         },
                         onBucket = {},
                         onMore = { more ->
