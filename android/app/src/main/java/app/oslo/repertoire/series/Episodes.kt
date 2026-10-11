@@ -19,6 +19,8 @@ data class Episode(
     val airDate: String? = null,
     /** Provider episode stream id; null when only TMDB knows the episode. */
     val streamId: String? = null,
+    /** The provider's own episode title, as TiviMate lists it (used to find the row there). */
+    val sourceTitle: String? = null,
 ) {
     val code: String get() = "S$season E$number"
     val inCatalog: Boolean get() = streamId != null
@@ -53,6 +55,7 @@ object EpisodeMerge {
                 still = t.still ?: p.still,
                 airDate = t.airDate ?: p.airDate,
                 streamId = p.streamId,
+                sourceTitle = p.sourceTitle,
             )
         }
         return byKey.values.sortedWith(compareBy({ it.season }, { it.number }))
@@ -138,6 +141,7 @@ object ProviderSeries {
                     still = text(info, "movie_image")?.takeIf { it.startsWith("http") },
                     airDate = text(info, "releasedate") ?: text(info, "air_date"),
                     streamId = id,
+                    sourceTitle = text(e, "title"),
                 )
             }
         }

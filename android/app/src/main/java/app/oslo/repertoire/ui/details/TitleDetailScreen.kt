@@ -51,6 +51,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -160,6 +161,9 @@ fun TitleDetailScreen(
                     },
                     onSave = if (!state.loading || detail != null) ({ saving = true }) else null,
                 )
+            }
+            if (page.isSeries && state.inCatalog) {
+                episodesSection(model, page, state.series)
             }
             if (Tmdb.enabled) {
                 when {
@@ -300,8 +304,23 @@ private fun Actions(
     val prefs = model.playbackPrefs
     val versions = remember(state.versions, prefs) { model.orderVersions(state.versions) }
     val best = versions.firstOrNull()
+    // Series: list the episodes of the version Play would use.
+    if (page.isSeries && best != null) {
+        LaunchedEffect(best.name) { page.showEpisodesOf(best.name) }
+    }
+    val series = state.series
+    val episodeAction = if (page.isSeries && series.seriesName != null) series.action else null
     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
-        if (best != null) {
+        if (best != null && episodeAction != null) {
+            val tuningEpisode = model.tune?.name?.startsWith(series.seriesName.orEmpty() + " S") == true
+            EpisodeActions(
+                action = episodeAction,
+                deviceName = model.deviceName,
+                tuning = tuningEpisode,
+                enabled = model.tune == null,
+                onPlay = { page.playEpisode(model, it) },
+            )
+        } else if (best != null) {
             val tuning = model.isTuning(state.versions)
             Button(
                 onClick = { model.play(best.name) },
@@ -424,6 +443,50 @@ private fun Actions(
                 }
             }
         }
+    }
+}
+
+private fun androidx.compose.foundation.lazy.LazyListScope.episodesSection(
+    model: GuideViewModel,
+    page: TitleDetailViewModel,
+    series: SeriesState,
+) {
+    if (series.seriesName == null) return
+    item(key = "episodes-header") {
+        Column(Modifier.padding(top = 8.dp)) {
+            SectionHeader("Episodes")
+        }
+    }
+    if (series.seasons.size > 1) {
+        item(key = "seasons") {
+            SeasonPicker(series.seasons, series.selected, page::selectSeason)
+            Spacer(Modifier.height(14.dp))
+        }
+    }
+    item(key = "episode-shelf") {
+        val season = series.selected
+        val episodes = season?.let { series.episodes(it) }.orEmpty()
+        when {
+            episodes.isNotEmpty() -> {
+                val tune = model.tune?.name
+                val tuning = episodes.firstOrNull { tune == "${series.seriesName} S${it.season} E${it.number}" }?.let { it.season to it.number }
+                EpisodeShelf(
+                    episodes = episodes,
+                    lastWatched = series.progress?.let { it.season to it.episode },
+                    tuning = tuning,
+                    enabled = model.tune == null,
+                    onPlay = { page.playEpisode(model, it) },
+                )
+            }
+            series.loading || series.loadingSeason == season -> EpisodeShelfSkeleton()
+            else -> Text(
+                if (series.providerFailed) "Couldn't read the episode list from your provider." else "No episodes listed for this season.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+            )
+        }
+        Spacer(Modifier.height(12.dp))
     }
 }
 
