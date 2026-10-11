@@ -181,6 +181,15 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
     var dynamicColor by mutableStateOf(uiPrefs.dynamicColor)
         private set
 
+    /** Movies and series as posters rather than rows. */
+    var posterGrid by mutableStateOf(uiPrefs.posterGrid)
+        private set
+
+    fun showPosterGrid(on: Boolean) {
+        posterGrid = on
+        uiPrefs.posterGrid = on
+    }
+
     /** Preferred audio language (device language unless set, EN as the fallback) and 4K preference. */
     var playbackPrefs by mutableStateOf(
         PlaybackPrefs(

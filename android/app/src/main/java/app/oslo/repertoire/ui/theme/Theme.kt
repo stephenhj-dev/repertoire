@@ -23,10 +23,10 @@ val dynamicColorAvailable: Boolean get() = Build.VERSION.SDK_INT >= Build.VERSIO
 
 val AppShapes = Shapes(
     extraSmall = RoundedCornerShape(8.dp),
-    small = RoundedCornerShape(12.dp),
+    small = RoundedCornerShape(Radii.chip),
     medium = RoundedCornerShape(16.dp),
-    large = RoundedCornerShape(24.dp),
-    extraLarge = RoundedCornerShape(32.dp),
+    large = RoundedCornerShape(Radii.card),
+    extraLarge = RoundedCornerShape(Radii.sheet),
 )
 
 @Composable
@@ -37,13 +37,13 @@ fun isAppInDarkTheme(mode: ThemeMode): Boolean = when (mode) {
 }
 
 /**
- * Material You colours from the wallpaper on Android 12+, otherwise the brand palette
- * (near-black with the amber mark from the icon, or its warm light counterpart).
+ * The brand palette (near-black with the amber mark from the icon, or its warm light
+ * counterpart). Wallpaper colours on Android 12+ only when the user turns them on.
  */
 @Composable
 fun GuideTheme(
     mode: ThemeMode = ThemeMode.System,
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val dark = isAppInDarkTheme(mode)

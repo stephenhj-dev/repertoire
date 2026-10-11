@@ -120,7 +120,8 @@ class UiPrefs(context: Context) {
         set(value) { preferences.edit().putString("themeMode", value).apply() }
 
     var dynamicColor: Boolean
-        get() = preferences.getBoolean("dynamicColor", true)
+        // Brand amber by default; wallpaper colours are opt-in.
+        get() = preferences.getBoolean("dynamicColor", false)
         set(value) { preferences.edit().putBoolean("dynamicColor", value).apply() }
 
     /** True once setup was finished or skipped. */
@@ -132,6 +133,11 @@ class UiPrefs(context: Context) {
     var audioLanguage: String?
         get() = preferences.getString("audioLanguage", null)
         set(value) { preferences.edit().putString("audioLanguage", value).apply() }
+
+    /** Movies and series as a poster grid (true) or as rows. */
+    var posterGrid: Boolean
+        get() = preferences.getBoolean("posterGrid", true)
+        set(value) { preferences.edit().putBoolean("posterGrid", value).apply() }
 
     var prefer4k: Boolean
         get() = preferences.getBoolean("prefer4k", false)
