@@ -66,6 +66,13 @@ import app.oslo.repertoire.ui.components.SkeletonList
 import app.oslo.repertoire.ui.components.PlayButton
 import app.oslo.repertoire.ui.components.VersionChooserSheet
 import app.oslo.repertoire.library.Version
+import app.oslo.repertoire.watchlist.QueueItem
+import app.oslo.repertoire.watchlist.TitleRef
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import app.oslo.repertoire.library.VersionPicker
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -94,6 +101,7 @@ fun PersonScreen(
     model: GuideViewModel,
     onBack: () -> Unit,
     onTitle: (TitleDetailRoute) -> Unit,
+    onOpenList: (Long) -> Unit = {},
     page: PersonViewModel = viewModel(),
 ) {
     val state = page.state
@@ -113,13 +121,19 @@ fun PersonScreen(
                 onAction = page::load,
             )
             person == null -> SkeletonList(rows = 6, poster = true)
-            else -> PersonContent(model, page, person, onTitle)
+            else -> PersonContent(model, page, person, onTitle, onOpenList)
         }
     }
 }
 
 @Composable
-private fun PersonContent(model: GuideViewModel, page: PersonViewModel, person: TmdbPerson, onTitle: (TitleDetailRoute) -> Unit) {
+private fun PersonContent(
+    model: GuideViewModel,
+    page: PersonViewModel,
+    person: TmdbPerson,
+    onTitle: (TitleDetailRoute) -> Unit,
+    onOpenList: (Long) -> Unit,
+) {
     val state = page.state
     val group = page.group
     val visible = page.visible
@@ -173,6 +187,9 @@ private fun PersonContent(model: GuideViewModel, page: PersonViewModel, person: 
         if (state.groups.isNotEmpty()) {
             item(key = "filmography-header") { SectionHeader("Filmography") }
             item(key = "controls") { Controls(page, owned, inGroup.size) }
+            if (owned > 0) {
+                item(key = "play-all") { PlayAllRow(model, page, person, onOpenList) }
+            }
             if (visible.isEmpty()) {
                 item(key = "empty") {
                     EmptyState(
@@ -189,6 +206,47 @@ private fun PersonContent(model: GuideViewModel, page: PersonViewModel, person: 
             }
         }
         item(key = "footnote") { TmdbFootnote() }
+    }
+}
+
+/** "Play all" and "Save as watchlist" for the selected group's titles in the library, oldest first. */
+@Composable
+private fun PlayAllRow(model: GuideViewModel, page: PersonViewModel, person: TmdbPerson, onOpenList: (Long) -> Unit) {
+    val scope = rememberCoroutineScope()
+    val group = page.group
+    val owned = page.libraryCredits()
+    val name = "${person.name} · ${group?.label ?: "Films"}"
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Button(
+            onClick = { model.startQueue(name, owned.map { QueueItem(it.credit.title, it.library.map { e -> e.name }) }) },
+            enabled = model.tune == null,
+            modifier = Modifier.weight(1f),
+        ) {
+            Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("Play all ${owned.size}")
+        }
+        OutlinedButton(
+            onClick = {
+                scope.launch {
+                    val id = model.watchlists.create(
+                        name,
+                        owned.map { TitleRef(catalogKind(it.credit.mediaType), it.credit.id, it.credit.title, it.credit.year, it.credit.posterPath) },
+                        personId = person.id,
+                    )
+                    model.notify("Saved ${owned.size} titles to $name")
+                    onOpenList(id)
+                }
+            },
+            modifier = Modifier.weight(1f),
+        ) {
+            Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("Save as list", maxLines = 1)
+        }
     }
 }
 

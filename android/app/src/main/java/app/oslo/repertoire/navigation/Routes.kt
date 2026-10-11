@@ -1,6 +1,8 @@
 package app.oslo.repertoire.navigation
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.PlaylistPlay
+import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.outlined.LiveTv
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
@@ -14,7 +16,7 @@ import kotlinx.serialization.Serializable
 
 // Type-safe Navigation Compose routes.
 
-/** Graph holding the four bottom-bar destinations. */
+/** Graph holding the bottom-bar destinations. */
 @Serializable data object MainGraph
 @Serializable data object RemoteRoute
 @Serializable data object GuideRoute
@@ -39,7 +41,7 @@ import kotlinx.serialization.Serializable
  *  - TitleDetailRoute: movie/show page (poster, cast, director, ratings). tmdbId is filled in once
  *    titles are matched against TMDB; until then kind + name identify the catalog title.
  *  - PersonRoute: actor/director filmography.
- *  - WatchlistRoute: saved titles to watch later.
+ *  - WatchlistsRoute / WatchlistRoute: the user's lists of titles to watch in order.
  */
 @Serializable
 data class TitleDetailRoute(
@@ -51,7 +53,10 @@ data class TitleDetailRoute(
 )
 
 @Serializable data class PersonRoute(val tmdbPersonId: Int, val name: String = "")
-@Serializable data object WatchlistRoute
+
+/** The Lists tab and one list. */
+@Serializable data object WatchlistsRoute
+@Serializable data class WatchlistRoute(val listId: Long)
 
 enum class TopLevel(
     val route: Any,
@@ -62,5 +67,6 @@ enum class TopLevel(
     Remote(RemoteRoute, "Remote", Icons.Outlined.SettingsRemote, Icons.Rounded.SettingsRemote),
     Guide(GuideRoute, "Guide", Icons.Outlined.LiveTv, Icons.Rounded.LiveTv),
     Search(SearchRoute, "Search", Icons.Outlined.Search, Icons.Rounded.Search),
+    Lists(WatchlistsRoute, "Lists", Icons.AutoMirrored.Outlined.PlaylistPlay, Icons.AutoMirrored.Rounded.PlaylistPlay),
     Settings(SettingsRoute, "Settings", Icons.Outlined.Settings, Icons.Rounded.Settings),
 }

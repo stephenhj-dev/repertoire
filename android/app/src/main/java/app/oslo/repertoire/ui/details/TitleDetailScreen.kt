@@ -63,6 +63,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import app.oslo.repertoire.GuideViewModel
 import app.oslo.repertoire.navigation.TitleDetailRoute
 import app.oslo.repertoire.library.TitleDisplay
+import app.oslo.repertoire.ui.watchlists.AddToWatchlistSheet
+import app.oslo.repertoire.watchlist.TitleRef
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import app.oslo.repertoire.ui.components.VersionRow
 import app.oslo.repertoire.tmdb.TitleNormalizer
 import app.oslo.repertoire.tmdb.Tmdb
@@ -100,8 +107,18 @@ fun TitleDetailScreen(
     val primary = state.library.firstOrNull()
     val favoriteName = if (route.catalogId > 0) route.name else primary?.name
 
+    var saving by remember { mutableStateOf(false) }
+    if (saving) {
+        val ref = if (detail != null) {
+            TitleRef(route.kind, detail.id, detail.displayTitle, detail.year, detail.posterPath)
+        } else {
+            TitleRef(route.kind, 0, title, parsed.year, null, catalogName = state.library.firstOrNull()?.name ?: route.name)
+        }
+        AddToWatchlistSheet(model, ref, onDismiss = { saving = false })
+    }
+
     Box(Modifier.fillMaxSize()) {
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 32.dp)) {
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 32.dp + if (model.queue != null) 88.dp else 0.dp)) {
             item(key = "header") {
                 Header(route, detail, title, parsed.year)
             }
@@ -126,6 +143,7 @@ fun TitleDetailScreen(
                             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$key")))
                         }
                     },
+                    onSave = if (!state.loading || detail != null) ({ saving = true }) else null,
                 )
             }
             if (Tmdb.enabled) {
@@ -266,6 +284,7 @@ private fun Actions(
     favorite: Boolean?,
     onFavorite: () -> Unit,
     onTrailer: (String) -> Unit,
+    onSave: (() -> Unit)?,
 ) {
     val versions = model.orderVersions(state.versions)
     val best = versions.firstOrNull()
@@ -299,7 +318,7 @@ private fun Actions(
                 )
             }
         }
-        if (trailerKey != null || favorite != null) {
+        if (trailerKey != null || favorite != null || onSave != null) {
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (trailerKey != null) {
@@ -322,6 +341,19 @@ private fun Actions(
                                 if (favorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
                                 contentDescription = if (favorite) "Remove from favorites" else "Add to favorites",
                             )
+                        }
+                    }
+                }
+                if (onSave != null) {
+                    if (trailerKey == null && favorite == null) {
+                        OutlinedButton(onClick = onSave, modifier = Modifier.weight(1f).height(48.dp)) {
+                            Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Save to a list")
+                        }
+                    } else {
+                        FilledTonalIconButton(onClick = onSave, modifier = Modifier.size(48.dp)) {
+                            Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, contentDescription = "Save to a watchlist")
                         }
                     }
                 }

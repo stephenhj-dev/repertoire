@@ -59,6 +59,13 @@ class PersonViewModel(app: Application, handle: SavedStateHandle) : AndroidViewM
             return if (onlyLibrary) sorted.filter { it.inLibrary } else sorted
         }
 
+    /** The selected group's titles that are in the library, oldest first, one per title. */
+    fun libraryCredits(): List<PersonCredit> {
+        val all = state.groups[group].orEmpty().filter { it.inLibrary }
+        val byCredit = all.associateBy { it.credit.mediaType to it.credit.id }
+        return Filmography.sort(all.map { it.credit }, newestFirst = false).mapNotNull { byCredit[it.mediaType to it.id] }
+    }
+
     fun load() {
         if (!Tmdb.enabled) {
             state = PersonState(loading = false, error = "TMDB isn't set up in this build.")

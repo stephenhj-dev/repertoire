@@ -33,6 +33,10 @@ import app.oslo.repertoire.library.TitleGrouping
 import app.oslo.repertoire.library.Version
 import app.oslo.repertoire.library.VersionPicker
 import app.oslo.repertoire.library.VersionTagParser
+import app.oslo.repertoire.watchlist.PlayOrder
+import app.oslo.repertoire.watchlist.QueueItem
+import app.oslo.repertoire.watchlist.WatchlistShare
+import app.oslo.repertoire.watchlist.Watchlists
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.collectLatest
@@ -103,6 +107,24 @@ sealed interface GuideRow {
     data class Note(val text: String) : GuideRow
 }
 
+/**
+ * Titles played one after another ("Play all", a watchlist). [index] is the one playing; the
+ * Up next bar advances it manually.
+ */
+@Immutable
+data class PlayQueue(
+    val title: String,
+    val items: List<QueueItem>,
+    val index: Int,
+    /** Set when playing a watchlist, so advancing marks items watched. */
+    val listId: Long? = null,
+) {
+    val current: QueueItem get() = items[index]
+    val next: QueueItem?
+        get() = PlayOrder.next(items, index)?.let { items[it] }
+    val remaining: Int get() = PlayOrder.remaining(items, index)
+}
+
 /** A channel or title being tuned on the TV. */
 @Immutable
 data class TuneState(val name: String, val step: String)
@@ -170,6 +192,15 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
     val audioLanguageIsDevice: Boolean get() = uiPrefs.audioLanguage == null
 
     private val resolver = TitleResolver(app, viewModelScope)
+    val watchlists = Watchlists(app)
+
+    /** The Up next queue, if one is playing. */
+    var queue by mutableStateOf<PlayQueue?>(null)
+        private set
+
+    /** A shared list waiting for the user to confirm the import. */
+    var pendingImport by mutableStateOf<WatchlistShare.SharedList?>(null)
+        private set
     /** The current Guide list before grouping (titles one per catalog entry), for re-grouping. */
     private var rawRows: List<GuideRow> = emptyList()
     private var rawSearch: List<GuideRow> = emptyList()
@@ -348,6 +379,70 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
     fun playBest(names: List<String>) {
         val best = orderVersions(names).firstOrNull() ?: return
         play(best.name)
+    }
+
+    /** Plays the first unwatched in-library item and keeps the rest as Up next. */
+    fun startQueue(title: String, items: List<QueueItem>, listId: Long? = null) {
+        val first = PlayOrder.first(items)
+        if (first == null) {
+            notify(if (items.isEmpty()) "This list is empty" else "Nothing left to play: everything is watched or not in your library")
+            return
+        }
+        queue = PlayQueue(title, items, first, listId)
+        playBest(items[first].versions)
+    }
+
+    /** Next: marks the current watchlist item watched and tunes the next playable one. */
+    fun queueNext() {
+        val now = queue ?: return
+        if (tune != null) {
+            notify("Still opening ${tune?.name}")
+            return
+        }
+        val current = now.current
+        val items = now.items.toMutableList()
+        if (now.listId != null && current.itemId != null) {
+            items[now.index] = current.copy(watched = true)
+            viewModelScope.launch { watchlists.dao.setWatched(current.itemId, true) }
+        }
+        val next = PlayOrder.next(items, now.index)
+        if (next == null) {
+            queue = null
+            notify("That was the last one in ${now.title}")
+            return
+        }
+        queue = now.copy(items = items, index = next)
+        playBest(items[next].versions)
+    }
+
+    fun stopQueue() {
+        queue = null
+    }
+
+    /** Reads a shared list from text (share sheet, link or paste); asks before importing. */
+    fun offerImport(text: String?): Boolean {
+        val list = text?.let(WatchlistShare::decode)
+        if (list == null) {
+            if (!text.isNullOrBlank()) notify("That isn't a Repertoire list")
+            return false
+        }
+        pendingImport = list
+        return true
+    }
+
+    fun dismissImport() {
+        pendingImport = null
+    }
+
+    /** Imports the pending list; [onDone] gets the new list id. */
+    fun confirmImport(onDone: (Long) -> Unit) {
+        val list = pendingImport ?: return
+        pendingImport = null
+        viewModelScope.launch {
+            val id = watchlists.import(list)
+            notify("Imported ${list.name}")
+            onDone(id)
+        }
     }
 
     /** True while any of these names is being tuned. */

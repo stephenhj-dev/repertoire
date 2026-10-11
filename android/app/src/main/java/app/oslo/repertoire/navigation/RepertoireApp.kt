@@ -20,6 +20,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -60,7 +64,8 @@ import app.oslo.repertoire.ui.components.LocalNavAnimatedScope
 import app.oslo.repertoire.ui.components.LocalSharedTransitionScope
 import app.oslo.repertoire.ui.details.PersonScreen
 import app.oslo.repertoire.ui.details.TitleDetailScreen
-import app.oslo.repertoire.ui.details.WatchlistScreen
+import app.oslo.repertoire.ui.watchlists.WatchlistScreen
+import app.oslo.repertoire.ui.watchlists.WatchlistsScreen
 import app.oslo.repertoire.ui.devices.DevicesScreen
 import app.oslo.repertoire.ui.guide.GuideScreen
 import app.oslo.repertoire.ui.remote.RemoteScreen
@@ -105,6 +110,25 @@ fun RepertoireApp(model: GuideViewModel) {
         }
     }
 
+    model.pendingImport?.let { shared ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = model::dismissImport,
+            title = { Text("Import “${shared.name}”?") },
+            text = {
+                Text(
+                    (if (shared.items.size == 1) "1 title" else "${shared.items.size} titles") +
+                        ". It's added to your Lists; titles that aren't in your IPTV catalog are kept but skipped when playing.",
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    model.confirmImport { id -> nav.navigate(WatchlistRoute(id)) { launchSingleTop = true } }
+                }) { Text("Import") }
+            },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = model::dismissImport) { Text("Cancel") } },
+        )
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
@@ -138,7 +162,7 @@ fun RepertoireApp(model: GuideViewModel) {
         },
     ) { padding ->
         // Screens draw their own top bars under the status bar; only the bottom bar is inset here.
-        val bottom = PaddingValues(bottom = padding.calculateBottomPadding())
+        val bottom = PaddingValues(bottom = padding.calculateBottomPadding() + if (model.queue != null) UP_NEXT_HEIGHT else 0.dp)
         Box(Modifier.fillMaxSize()) {
             SharedTransitionLayout {
                 CompositionLocalProvider(LocalSharedTransitionScope provides this) {
@@ -157,6 +181,13 @@ fun RepertoireApp(model: GuideViewModel) {
                     }
                 }
             }
+            UpNextBar(
+                model,
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .then(if (topLevel == null) Modifier.navigationBarsPadding() else Modifier)
+                    .padding(bottom = padding.calculateBottomPadding() + 8.dp),
+            )
             TuneCard(model, Modifier.align(Alignment.BottomCenter).padding(bottom = padding.calculateBottomPadding() + 12.dp))
         }
     }
@@ -214,13 +245,15 @@ private fun NavGraphBuilder.mainGraph(model: GuideViewModel, nav: NavHostControl
                 bottomInset = bottom,
             )
         }
+        screen<WatchlistsRoute> {
+            WatchlistsScreen(model, onOpen = { nav.navigate(WatchlistRoute(it)) }, bottomInset = bottom)
+        }
         screen<SettingsRoute> {
             SettingsScreen(
                 model,
                 tv,
                 onOpenPortal = { nav.navigate(PortalRoute) },
                 onOpenDevices = { nav.navigate(DevicesRoute) },
-                onOpenWatchlist = { nav.navigate(WatchlistRoute) },
                 onRunSetup = { nav.navigate(SetupGraph) },
                 bottomInset = bottom,
             )
@@ -239,9 +272,21 @@ private fun NavGraphBuilder.pushed(model: GuideViewModel, nav: NavHostController
         )
     }
     screen<PersonRoute>(pushed = true) {
-        PersonScreen(model, onBack = { nav.popBackStack() }, onTitle = { nav.navigate(it) })
+        PersonScreen(
+            model,
+            onBack = { nav.popBackStack() },
+            onTitle = { nav.navigate(it) },
+            onOpenList = { nav.navigate(WatchlistRoute(it)) },
+        )
     }
-    screen<WatchlistRoute>(pushed = true) { WatchlistScreen(onBack = { nav.popBackStack() }) }
+    screen<WatchlistRoute>(pushed = true) {
+        WatchlistScreen(
+            model,
+            onBack = { nav.popBackStack() },
+            onTitle = { nav.navigate(it) },
+            bottomInset = PaddingValues(bottom = if (model.queue != null) UP_NEXT_HEIGHT else 0.dp),
+        )
+    }
 }
 
 private fun NavGraphBuilder.setupGraph(model: GuideViewModel, nav: NavHostController, tv: app.oslo.repertoire.remote.TvStatus) {
@@ -269,6 +314,53 @@ private fun NavGraphBuilder.setupGraph(model: GuideViewModel, nav: NavHostContro
             SetupConnectScreen(model, tv, onBack = { nav.popBackStack() }, onNext = { nav.navigate(SetupDoneRoute) })
         }
         screen<SetupDoneRoute>(pushed = true) { SetupDoneScreen(model, onFinish = { finish() }) }
+    }
+}
+
+private val UP_NEXT_HEIGHT = 80.dp
+
+/**
+ * Persistent Up next control while a queue plays (Play all, a watchlist): what's on, what's
+ * next, and Next to tune it. Hidden while a title is being tuned (the tune card shows instead).
+ */
+@Composable
+private fun UpNextBar(model: GuideViewModel, modifier: Modifier = Modifier) {
+    val queue = model.queue
+    AnimatedVisibility(
+        visible = queue != null && model.tune == null,
+        modifier = modifier,
+        enter = slideInVertically { it / 2 } + fadeIn(),
+        exit = slideOutVertically { it / 2 } + fadeOut(),
+    ) {
+        val shown = queue ?: return@AnimatedVisibility
+        ElevatedCard(Modifier.fillMaxWidth().padding(horizontal = 12.dp).semantics { liveRegion = LiveRegionMode.Polite }) {
+            Row(Modifier.padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.foundation.layout.Column(Modifier.weight(1f)) {
+                    Text(
+                        shown.current.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    val next = shown.next
+                    Text(
+                        if (next != null) "Up next: ${next.title}" + (if (shown.remaining > 1) " · ${shown.remaining} left" else "") else "Last in ${shown.title}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                androidx.compose.material3.FilledTonalButton(onClick = model::queueNext) {
+                    Icon(Icons.Rounded.SkipNext, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (shown.next != null) "Next" else "Done")
+                }
+                androidx.compose.material3.IconButton(onClick = model::stopQueue) {
+                    Icon(Icons.Rounded.Close, contentDescription = "Stop ${shown.title}")
+                }
+            }
+        }
     }
 }
 

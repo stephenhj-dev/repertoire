@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Link
@@ -76,7 +75,6 @@ fun SettingsScreen(
     tv: TvStatus,
     onOpenPortal: () -> Unit,
     onOpenDevices: () -> Unit,
-    onOpenWatchlist: () -> Unit,
     onRunSetup: () -> Unit,
     bottomInset: PaddingValues,
 ) {
@@ -236,18 +234,6 @@ fun SettingsScreen(
                         colors = itemColors,
                     )
                 }
-            }
-
-            item { SectionHeader("Library") }
-            item {
-                ListItem(
-                    headlineContent = { Text("Watchlist") },
-                    supportingContent = { Text("Coming soon: save movies and shows for later") },
-                    leadingContent = { Icon(Icons.Rounded.BookmarkBorder, contentDescription = null) },
-                    trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null) },
-                    modifier = Modifier.clickable(onClick = onOpenWatchlist),
-                    colors = itemColors,
-                )
             }
 
             item { SectionHeader("About") }
