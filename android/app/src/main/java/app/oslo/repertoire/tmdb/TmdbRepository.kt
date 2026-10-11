@@ -48,6 +48,30 @@ object Tmdb {
             TmdbPerson.serializer(),
         )
 
+    /** One page (20) of TMDB's top rated movies. Not persisted: the launch wall keeps its own list. */
+    suspend fun topRatedMovies(context: Context, page: Int): List<TmdbMovieListItem> =
+        client(context).get(
+            "/movie/top_rated",
+            mapOf("page" to page.toString(), "language" to language),
+            TmdbPage.serializer(TmdbMovieListItem.serializer()),
+            persist = false,
+        ).results
+
+    /** Acclaimed films from the last few years with plenty of votes. */
+    suspend fun acclaimedRecentMovies(context: Context, sinceYear: Int): List<TmdbMovieListItem> =
+        client(context).get(
+            "/discover/movie",
+            mapOf(
+                "sort_by" to "vote_average.desc",
+                "vote_count.gte" to "1500",
+                "primary_release_date.gte" to "$sinceYear-01-01",
+                "include_adult" to "false",
+                "language" to language,
+            ),
+            TmdbPage.serializer(TmdbMovieListItem.serializer()),
+            persist = false,
+        ).results
+
     suspend fun searchPeople(context: Context, query: String): List<TmdbPersonHit> =
         client(context).get(
             "/search/person",

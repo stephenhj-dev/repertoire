@@ -187,3 +187,14 @@ fun pickTrailer(videos: List<TmdbVideo>): TmdbVideo? {
     return youtube.filter { it.type == "Trailer" }.sortedWith(compareBy({ !it.official }, { it.publishedAt ?: "" })).firstOrNull()
         ?: youtube.firstOrNull { it.type == "Teaser" }
 }
+
+/** A movie from a /movie/top_rated or /discover/movie page. */
+@Serializable
+data class TmdbMovieListItem(
+    val id: Int = 0,
+    val title: String? = null,
+    @SerialName("poster_path") val posterPath: String? = null,
+    @SerialName("release_date") val releaseDate: String? = null,
+    @SerialName("vote_count") val voteCount: Int = 0,
+    @SerialName("vote_average") val voteAverage: Double = 0.0,
+)
