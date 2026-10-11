@@ -101,3 +101,14 @@ class WatchlistShareTest {
         assertEquals(emptyList<WatchlistShare.SharedItem>(), WatchlistShare.decode(WatchlistShare.encode(bad))?.items)
     }
 }
+
+class ListPostersTest {
+    @Test
+    fun firstDistinctPostersPerListInOrder() {
+        val rows = listOf(1L to "/a.jpg", 1L to "/b.jpg", 1L to "/a.jpg", 2L to "/c.jpg", 1L to "", 1L to "/d.jpg", 1L to "/e.jpg", 1L to "/f.jpg")
+        val posters = app.oslo.repertoire.watchlist.firstPostersPerList(rows, count = 4)
+        org.junit.Assert.assertEquals(listOf("/a.jpg", "/b.jpg", "/d.jpg", "/e.jpg"), posters[1L])
+        org.junit.Assert.assertEquals(listOf("/c.jpg"), posters[2L])
+        org.junit.Assert.assertEquals(listOf(1L, 2L), posters.keys.toList())
+    }
+}

@@ -50,8 +50,15 @@ data class WatchlistSummary(
     val posterPath: String?,
 )
 
+/** One poster of a list, for the list overview's poster stack. */
+data class ListPoster(val listId: Long, val posterPath: String)
+
 @Dao
 interface WatchlistDao {
+    /** Posters of every list in list order (the table is small; uses the listId/position index). */
+    @Query("SELECT listId, posterPath FROM watchlist_items WHERE posterPath IS NOT NULL ORDER BY listId, position, id")
+    fun posters(): Flow<List<ListPoster>>
+
     @Query(
         """
         SELECT w.id AS id, w.name AS name, w.position AS position, w.personId AS personId,

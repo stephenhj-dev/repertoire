@@ -1,5 +1,7 @@
 package app.oslo.repertoire.ui.watchlists
 
+import app.oslo.repertoire.watchlist.firstPostersPerList
+
 import android.app.Application
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
@@ -28,6 +30,10 @@ class WatchlistsViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var loaded by mutableStateOf(false)
         private set
+
+    /** Up to five posters per list. */
+    var posters by mutableStateOf<Map<Long, List<String>>>(emptyMap())
+        private set
     private var dragging = false
 
     init {
@@ -35,6 +41,11 @@ class WatchlistsViewModel(app: Application) : AndroidViewModel(app) {
             repo.dao.summaries().collectLatest {
                 if (!dragging) lists = it
                 loaded = true
+            }
+        }
+        viewModelScope.launch {
+            repo.dao.posters().collectLatest { rows ->
+                posters = firstPostersPerList(rows.map { it.listId to it.posterPath })
             }
         }
     }

@@ -111,3 +111,14 @@ object WatchlistShare {
     fun message(list: SharedList): String =
         "${list.name} · ${list.items.size} ${if (list.items.size == 1) "title" else "titles"} on Repertoire\n" + encode(list)
 }
+
+/** The first [count] distinct posters of each list, in list order, for the overview's stacks. */
+fun firstPostersPerList(rows: List<Pair<Long, String>>, count: Int = 5): Map<Long, List<String>> {
+    val out = LinkedHashMap<Long, MutableList<String>>()
+    for ((list, poster) in rows) {
+        if (poster.isBlank()) continue
+        val posters = out.getOrPut(list) { mutableListOf() }
+        if (posters.size < count && poster !in posters) posters += poster
+    }
+    return out
+}

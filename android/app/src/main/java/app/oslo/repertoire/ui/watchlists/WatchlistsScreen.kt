@@ -1,5 +1,9 @@
 package app.oslo.repertoire.ui.watchlists
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -74,7 +78,7 @@ fun WatchlistsScreen(
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().nestedScroll(scroll.nestedScrollConnection)) {
             LargeTopAppBar(
-                title = { Text("Watchlists") },
+                title = { Text("Lists") },
                 actions = {
                     IconButton(onClick = { importing = true }) { Icon(Icons.Rounded.ContentPaste, contentDescription = "Import a shared list") }
                 },
@@ -111,9 +115,9 @@ fun WatchlistsScreen(
                                     )
                                 },
                             leadingContent = {
-                                PosterImage(TmdbImages.poster(list.posterPath), list.name, width = 44.dp, height = 64.dp)
+                                PosterStack(page.posters[list.id].orEmpty().ifEmpty { listOfNotNull(list.posterPath) }, list.name)
                             },
-                            headlineContent = { Text(list.name, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+                            headlineContent = { Text(list.name, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis) },
                             supportingContent = { Text(countLine(list)) },
                             trailingContent = {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -175,6 +179,32 @@ fun WatchlistsScreen(
             importing = false
             model.offerImport(text)
         }, onDismiss = { importing = false })
+    }
+}
+
+/** A list's first posters fanned out like a hand of cards, Letterboxd-style; one blank card when empty. */
+@Composable
+private fun PosterStack(paths: List<String>, name: String) {
+    val shown = paths.take(4)
+    val cardW = 46.dp
+    val step = 18.dp
+    Box(Modifier.size(width = cardW + step * 3, height = 70.dp)) {
+        if (shown.isEmpty()) {
+            PosterImage(null, name, width = cardW, height = 69.dp, corner = 6.dp)
+        }
+        // Back to front: the first poster sits on top.
+        shown.withIndex().reversed().forEach { (i, path) ->
+            PosterImage(
+                TmdbImages.poster(path),
+                name,
+                width = cardW,
+                height = 69.dp,
+                corner = 6.dp,
+                modifier = Modifier
+                    .offset(x = step * i)
+                    .shadow(6.dp, androidx.compose.foundation.shape.RoundedCornerShape(6.dp), ambientColor = Color.Black, spotColor = Color.Black),
+            )
+        }
     }
 }
 
