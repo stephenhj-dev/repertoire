@@ -35,9 +35,13 @@ class ReorderState(
     var offset by mutableFloatStateOf(0f)
         private set
 
+    /** Index the dragged row should have once the last swap is laid out. */
+    private var awaitIndex: Int? = null
+
     fun start(key: Any) {
         draggingKey = key
         offset = 0f
+        awaitIndex = null
     }
 
     fun drag(dy: Float) {
@@ -45,12 +49,16 @@ class ReorderState(
         offset += dy
         val visible = listState.layoutInfo.visibleItemsInfo
         val current = visible.firstOrNull { it.key == key } ?: return
+        // Wait for the previous swap to be laid out before swapping again.
+        if (awaitIndex != null && current.index != awaitIndex) return
+        awaitIndex = null
         val center = current.offset + offset + current.size / 2f
         val target = visible.firstOrNull {
             it.key != key && it.contentType == REORDERABLE && center >= it.offset && center <= it.offset + it.size
         } ?: return
         // The row will be laid out where the target was; keep it under the finger.
         offset += (current.offset - target.offset).toFloat()
+        awaitIndex = target.index
         onMove(key, target.key)
     }
 
