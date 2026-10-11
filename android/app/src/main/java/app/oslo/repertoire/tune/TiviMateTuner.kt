@@ -51,24 +51,35 @@ class TiviMateTuner(
         }
         log("series page", items)
         val seasonNode = TiviMateScreens.seasonNode(items, season)
-        if (seasonNode != null) {
+        if (seasonNode != null && !seasonNode.focused && !seasonNode.selected) {
+            // On TV a tap focuses; TiviMate switches the episode row when a season gets focus,
+            // and OK confirms it where it doesn't.
             tap(seasonNode.left, seasonNode.top, seasonNode.right, seasonNode.bottom)
-            pause(700)
+            pause(600)
             items = dumpNodes()
-        } else if (TiviMateScreens.seasonsOnScreen(items).isNotEmpty()) {
+            if (!TiviMateScreens.showsSeason(items, season, episode, title)) {
+                key("KEYCODE_DPAD_CENTER")
+                pause(700)
+                items = dumpNodes()
+            }
+        } else if (seasonNode == null && TiviMateScreens.seasonsOnScreen(items).isNotEmpty()) {
             return "Opened $series on the TV. Season $season isn't listed there; pick it with the remote"
         }
         report("Finding $code")
-        val row = findEpisode(items, season, episode, title)
-            ?: return "Opened $series on the TV. Pick $code there with the remote"
-        tap(row.left, row.top, row.right, row.bottom)
-        pause(900)
+        if (!focusEpisode(items, season, episode, title)) {
+            log("episode not found", dumpNodes())
+            return "Opened $series on the TV. Pick $code there with the remote"
+        }
+        key("KEYCODE_DPAD_CENTER")
+        pause(1000)
         var seen = dumpNodes()
-        // Only press Play on a new (episode) page: on the series page itself Play would start
-        // TiviMate's own "continue" episode instead of this one.
+        // An episode page with its own Play button. Never press Play on the series page itself:
+        // that would start TiviMate's own "continue" episode instead of this one.
         val play = seen.firstOrNull { it.text in PLAY_LABELS && it.clickable }
         if (play != null && TiviMateScreens.seasonsOnScreen(seen).isEmpty()) {
-            tap(play.left, play.top, play.right, play.bottom)
+            if (!play.focused) tap(play.left, play.top, play.right, play.bottom)
+            pause(300)
+            key("KEYCODE_DPAD_CENTER")
             pause(1400)
             seen = dumpNodes()
         }
@@ -77,26 +88,38 @@ class TiviMateTuner(
         return "Opened $series $code on the TV; press OK there if it didn't start"
     }
 
-    /** Finds the episode row, swiping the episode list up or down until it is on screen. */
-    private fun findEpisode(start: List<UiNode>, season: Int, episode: Int, title: String?): UiNode? {
+    /**
+     * Puts focus on the episode tile: tap it when it's on screen (a tap focuses on TV),
+     * otherwise focus a visible episode and step Left/Right by the difference in numbers.
+     */
+    private fun focusEpisode(start: List<UiNode>, season: Int, episode: Int, title: String?): Boolean {
         var items = start
-        var lastSeen = emptyList<Int>()
-        repeat(14) {
-            TiviMateScreens.episodeNode(items, season, episode, title)?.let { return it }
-            val visible = TiviMateScreens.visibleEpisodes(items, season)
-            if (visible.isEmpty() || visible == lastSeen) return null
-            lastSeen = visible
-            val rows = items.filter { TiviMateScreens.leadingEpisodeNumber(it.label) != null || TiviMateScreens.episodeCode(it.label) != null }
-            val top = rows.minOf { it.top }
-            val bottom = rows.maxOf { it.bottom }
-            val x = rows.first().centerX
-            val span = ((bottom - top) * 0.7).toInt().coerceAtLeast(120)
-            val down = episode > visible.max()
-            if (down) swipe(x, bottom, x, bottom - span) else swipe(x, top, x, top + span)
-            pause(600)
+        repeat(4) {
+            val target = TiviMateScreens.episodeNode(items, season, episode, title)
+            if (target != null && (target.focused || items.any { it.focused && it.contains(target) })) return true
+            if (target != null) {
+                tap(target.left, target.top, target.right, target.bottom)
+                pause(500)
+                items = dumpNodes()
+                return@repeat
+            }
+            val focused = TiviMateScreens.focusedEpisode(items, season)
+            if (focused == null) {
+                val any = TiviMateScreens.episodeNodes(items, season).firstOrNull() ?: return false
+                tap(any.second.left, any.second.top, any.second.right, any.second.bottom)
+                pause(500)
+                items = dumpNodes()
+                return@repeat
+            }
+            val delta = episode - focused
+            if (delta == 0) return true
+            val move = if (delta > 0) "KEYCODE_DPAD_RIGHT" else "KEYCODE_DPAD_LEFT"
+            shell.exec("input keyevent ${List(kotlin.math.abs(delta).coerceAtMost(60)) { move }.joinToString(" ")}")
+            pause(700)
             items = dumpNodes()
         }
-        return null
+        val target = TiviMateScreens.episodeNode(items, season, episode, title) ?: return false
+        return target.focused || items.any { it.focused && it.contains(target) }
     }
 
     /**
@@ -327,10 +350,6 @@ class TiviMateTuner(
 
     private fun key(name: String) {
         shell.exec("input keyevent $name")
-    }
-
-    private fun swipe(x1: Int, y1: Int, x2: Int, y2: Int) {
-        shell.exec("input swipe $x1 $y1 $x2 $y2 350")
     }
 
     private fun log(what: String, items: List<UiNode>) {

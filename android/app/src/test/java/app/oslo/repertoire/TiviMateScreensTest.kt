@@ -106,6 +106,20 @@ class TiviMateScreensTest {
     }
 
     @Test
+    fun knowsWhichEpisodeHasFocus() {
+        val tile = UiNode("", "android.widget.FrameLayout", true, true, false, 300, 600, 600, 800)
+        val items = listOf(
+            UiNode("", "android.view.ViewGroup", true, true, false, 0, 0, 1920, 1080),
+            tile,
+            node("S02E04 - The Hunt", 700).copy(left = 320, right = 580),
+            node("S02E05 - Lost", 700).copy(left = 620, right = 880),
+        )
+        assertEquals(4, TiviMateScreens.focusedEpisode(items, 2))
+        assertTrue(TiviMateScreens.showsSeason(items, 2, 9, null))
+        assertFalse(TiviMateScreens.showsSeason(items, 3, 1, null))
+    }
+
+    @Test
     fun namedEntries() {
         assertTrue(TiviMateScreens.isTrackEntry("Closed captions 1", Track.Subtitles))
         assertTrue(TiviMateScreens.isTrackEntry("Audio track", Track.Audio))

@@ -81,6 +81,25 @@ object TiviMateScreens {
         items.mapNotNull { node -> episodeMatch(node.label, season, episode, title)?.let { node to it } }
             .minWithOrNull(compareBy({ it.second }, { if (it.first.clickable) 0 else 1 }))?.first
 
+    /** Episode tiles on screen with their numbers. */
+    fun episodeNodes(items: List<UiNode>, season: Int): List<Pair<Int, UiNode>> = items.mapNotNull { node ->
+        val number = episodeCode(node.label)?.let { (s, e) -> if (s == season) e else null } ?: leadingEpisodeNumber(node.label)
+        number?.let { it to node }
+    }
+
+    /** The number of the episode tile that has focus (the focused node or its focused parent). */
+    fun focusedEpisode(items: List<UiNode>, season: Int): Int? {
+        val tiles = episodeNodes(items, season)
+        tiles.firstOrNull { it.second.focused }?.let { return it.first }
+        val parent = items.filter { it.focused }.minByOrNull { (it.right - it.left) * (it.bottom - it.top) } ?: return null
+        return tiles.firstOrNull { parent.contains(it.second) }?.first
+    }
+
+    /** The episode row shows [season]: the wanted episode is there, or tiles carry its S code. */
+    fun showsSeason(items: List<UiNode>, season: Int, episode: Int, title: String?): Boolean =
+        episodeNode(items, season, episode, title) != null ||
+            items.any { episodeCode(it.label)?.first == season }
+
     /** Episode numbers visible on screen (for knowing which way, and whether, to scroll). */
     fun visibleEpisodes(items: List<UiNode>, season: Int): List<Int> = items.mapNotNull { node ->
         episodeCode(node.label)?.let { (s, e) -> if (s == season) e else null } ?: leadingEpisodeNumber(node.label)
