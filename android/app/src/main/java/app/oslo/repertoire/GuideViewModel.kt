@@ -358,6 +358,18 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
 
     fun onDevicesShown() = checkDevice()
 
+    /**
+     * The setup guide that fits the chosen TV: from what debugging reported, else the mDNS
+     * name and model. Null when nothing is known.
+     */
+    val suggestedGuide: app.oslo.repertoire.setup.TvGuide?
+        get() {
+            val device = devices.firstOrNull { it.host == selectedHost }
+            val maker = tvStore.manufacturer.takeIf { selectedHost.isNotBlank() && adbOk == true }
+            return app.oslo.repertoire.setup.BrandMatch.suggest(maker, device?.model ?: deviceModel, device?.name)
+                ?: if (fireTv) app.oslo.repertoire.setup.TvGuides.fireTv else null
+        }
+
     fun notify(text: String, retry: String? = null, openDevices: Boolean = false) {
         if (text.isBlank()) return
         val now = System.currentTimeMillis()
@@ -490,6 +502,7 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
         host = clean
         tvStore.host = clean
         tvStore.name = device.name.takeIf { it != clean }.orEmpty()
+        if (switched) tvStore.manufacturer = ""
         tvStore.model = device.model
         if (switched) {
             reconnectJob?.cancel()
@@ -553,6 +566,7 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
                 tvStore.remoteV2 = remoteV2
                 tvStore.adb = adbSupport
                 fireTv = result.fireTv || devices.firstOrNull { it.host == address }?.fireTv == true
+                if (result.ok && result.manufacturer.isNotBlank()) tvStore.manufacturer = result.manufacturer
                 if (result.ok && result.model.isNotBlank()) {
                     tvStore.model = result.model
                     devices = devices.map { if (it.host == address) it.copy(model = result.model, fireTv = fireTv) else it }

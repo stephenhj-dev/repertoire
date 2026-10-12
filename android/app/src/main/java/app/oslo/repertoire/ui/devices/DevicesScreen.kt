@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ExpandLess
@@ -77,7 +78,7 @@ import app.oslo.repertoire.ui.theme.AppTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DevicesScreen(model: GuideViewModel, tv: TvStatus, onBack: () -> Unit) {
+fun DevicesScreen(model: GuideViewModel, tv: TvStatus, onBack: () -> Unit, onGuide: (String) -> Unit = {}) {
     LaunchedEffect(Unit) {
         model.onDevicesShown()
         if (model.devices.size <= 1) model.findTv()
@@ -98,14 +99,14 @@ fun DevicesScreen(model: GuideViewModel, tv: TvStatus, onBack: () -> Unit) {
             Modifier.fillMaxSize().navigationBarsPadding().imePadding(),
             contentPadding = PaddingValues(bottom = 32.dp),
         ) {
-            deviceList(model, tv)
+            deviceList(model, tv, onGuide = onGuide)
         }
     }
     PairDialog(model, tv)
 }
 
 /** Device picker, selected-TV status, manual address and help. Shared with setup. */
-fun LazyListScope.deviceList(model: GuideViewModel, tv: TvStatus, showConnection: Boolean = true) {
+fun LazyListScope.deviceList(model: GuideViewModel, tv: TvStatus, showConnection: Boolean = true, onGuide: (String) -> Unit = {}) {
     item(key = "scan") {
         Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
             if (model.scanning) {
@@ -140,7 +141,7 @@ fun LazyListScope.deviceList(model: GuideViewModel, tv: TvStatus, showConnection
         }
     }
     item(key = "manual") { ManualAddress(model) }
-    item(key = "help") { DebuggingHelp() }
+    item(key = "help") { GuideLink(model, onGuide) }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -256,31 +257,29 @@ private fun ManualAddress(model: GuideViewModel) {
     }
 }
 
+/** Opens the step-by-step guide for the chosen TV's brand (or the brand picker). */
 @Composable
-private fun DebuggingHelp() {
-    var open by rememberSaveable { mutableStateOf(false) }
+fun GuideLink(model: GuideViewModel, onGuide: (String) -> Unit, modifier: Modifier = Modifier) {
+    val guide = model.suggestedGuide
     Card(
-        onClick = { open = !open },
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp).animateContentSize(),
+        onClick = { onGuide(guide?.id.orEmpty()) },
+        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
     ) {
-        Column(Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("How to turn on network debugging", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                Icon(if (open) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, contentDescription = if (open) "Collapse" else "Expand")
-            }
-            AnimatedVisibility(open) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
                 Text(
-                    "Repertoire tunes channels by talking to the TV over network debugging (ADB).\n\n" +
-                        "• NVIDIA Shield: Settings → Device preferences → Developer options → Network debugging.\n" +
-                        "• Google TV / Android TV: Settings → System → About, tap Build 7 times, then System → Developer options → USB debugging.\n" +
-                        "• Fire TV: Settings → My Fire TV → Developer options → ADB debugging.\n\n" +
-                        "The first time, the TV asks to allow this phone. Tick Always allow.",
+                    if (guide != null) "Set up ${guide.name} step by step" else "Step-by-step setup for your TV",
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Text(
+                    "Developer options, network debugging, the allow prompt, and fixes when it won't connect.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 12.dp),
+                    modifier = Modifier.padding(top = 4.dp),
                 )
             }
+            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null)
         }
     }
 }

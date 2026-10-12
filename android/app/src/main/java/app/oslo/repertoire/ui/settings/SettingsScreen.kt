@@ -77,6 +77,7 @@ fun SettingsScreen(
     tv: TvStatus,
     onOpenPortal: () -> Unit,
     onOpenDevices: () -> Unit,
+    onOpenGuides: () -> Unit,
     onRunSetup: () -> Unit,
     bottomInset: PaddingValues,
 ) {
@@ -148,6 +149,16 @@ fun SettingsScreen(
                     leadingContent = { Icon(Icons.Rounded.Tv, contentDescription = null) },
                     trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null) },
                     modifier = Modifier.clickable(onClickLabel = "Switch TV", onClick = onOpenDevices),
+                    colors = itemColors,
+                )
+            }
+            item {
+                ListItem(
+                    headlineContent = { Text("TV setup guides") },
+                    supportingContent = { Text("Step by step for Shield, Google TV, Fire TV, Sony, TCL and more") },
+                    leadingContent = { Icon(Icons.Rounded.Tv, contentDescription = null) },
+                    trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null) },
+                    modifier = Modifier.clickable(onClick = onOpenGuides),
                     colors = itemColors,
                 )
             }

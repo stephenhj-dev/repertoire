@@ -91,6 +91,11 @@ class TvStore(context: Context) {
         get() = preferences.getString("model", "") ?: ""
         set(value) { preferences.edit().putString("model", value.trim()).apply() }
 
+    /** ro.product.manufacturer of the TV in use, from the last debugging check. */
+    var manufacturer: String
+        get() = preferences.getString("manufacturer", "") ?: ""
+        set(value) { preferences.edit().putString("manufacturer", value.trim()).apply() }
+
     var keepConnected: Boolean
         get() = preferences.getBoolean("keepConnected", true)
         set(value) { preferences.edit().putBoolean("keepConnected", value).apply() }

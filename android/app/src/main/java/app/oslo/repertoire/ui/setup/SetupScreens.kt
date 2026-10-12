@@ -218,7 +218,7 @@ fun SetupPortalScreen(model: GuideViewModel, onBack: () -> Unit, onNext: () -> U
 }
 
 @Composable
-fun SetupTvScreen(model: GuideViewModel, tv: TvStatus, onBack: () -> Unit, onNext: () -> Unit) {
+fun SetupTvScreen(model: GuideViewModel, tv: TvStatus, onGuide: (String) -> Unit, onBack: () -> Unit, onNext: () -> Unit) {
     LaunchedEffect(Unit) { if (!model.scanning) model.findTv() }
     SetupStep(
         step = 2,
@@ -233,13 +233,13 @@ fun SetupTvScreen(model: GuideViewModel, tv: TvStatus, onBack: () -> Unit, onNex
         scroll = false,
     ) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
-            deviceList(model, tv, showConnection = false)
+            deviceList(model, tv, showConnection = false, onGuide = onGuide)
         }
     }
 }
 
 @Composable
-fun SetupConnectScreen(model: GuideViewModel, tv: TvStatus, onBack: () -> Unit, onNext: () -> Unit) {
+fun SetupConnectScreen(model: GuideViewModel, tv: TvStatus, onGuide: (String) -> Unit, onBack: () -> Unit, onNext: () -> Unit) {
     LaunchedEffect(model.selectedHost) { model.checkDevice() }
     val canPair = model.remoteV2 != Support.No
     SetupStep(
@@ -260,13 +260,21 @@ fun SetupConnectScreen(model: GuideViewModel, tv: TvStatus, onBack: () -> Unit, 
             body = if (model.adbOk == true) {
                 "Connected. When the TV asks to allow this phone, tick Always allow."
             } else {
-                "Shield: Device preferences → Developer options → Network debugging.\n" +
-                    "Google TV: System → Developer options → USB debugging.\n" +
-                    "Fire TV: My Fire TV → Developer options → ADB debugging."
+                val guide = model.suggestedGuide
+                val debugging = guide?.steps?.firstOrNull { it.kind == app.oslo.repertoire.setup.StepKind.Debugging }
+                if (guide != null && debugging != null) {
+                    "${guide.name}: ${debugging.path.drop(1).joinToString(" → ")} → ${debugging.title.removePrefix("Turn on ")}.\n" +
+                        "Developer options hidden? Open the step-by-step guide."
+                } else {
+                    "Developer options → network or USB debugging. The step-by-step guide shows where it is on your TV."
+                }
             },
             action = if (model.adbOk == true) null else "Check again",
             onAction = model::checkDevice,
         )
+        if (model.adbOk != true) {
+            app.oslo.repertoire.ui.devices.GuideLink(model, onGuide)
+        }
         Spacer(Modifier.height(12.dp))
         if (canPair) {
             StepCard(

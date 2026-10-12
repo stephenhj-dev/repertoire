@@ -35,6 +35,9 @@ import kotlinx.serialization.Serializable
 @Serializable data object DevicesRoute
 @Serializable data object PortalRoute
 
+/** Step-by-step TV connection guide; [guideId] empty = the one suggested for the chosen TV. */
+@Serializable data class TvGuideRoute(val guideId: String = "")
+
 /*
  * Extension points for the TMDB features. The routes and placeholder screens are wired up so the
  * real pages can drop in without touching navigation:
