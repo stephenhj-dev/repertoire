@@ -21,6 +21,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -178,10 +180,19 @@ fun VersionChooserSheet(
     enabled: Boolean,
     onPlay: (Version) -> Unit,
     onDismiss: () -> Unit,
+    /** Shows a watched toggle at the top when not null. */
+    watched: Boolean? = null,
+    onToggleWatched: () -> Unit = {},
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding()) {
             Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 24.dp))
+            if (watched != null) {
+                WatchedToggleRow(watched) {
+                    onToggleWatched()
+                    onDismiss()
+                }
+            }
             Text(
                 if (versions.size == 1) "1 version" else "${versions.size} versions",
                 style = MaterialTheme.typography.bodySmall,
@@ -206,4 +217,23 @@ fun VersionChooserSheet(
             Spacer(Modifier.width(1.dp))
         }
     }
+}
+
+/** "Mark as watched" / "Watched" row for sheets. */
+@Composable
+fun WatchedToggleRow(watched: Boolean, onToggle: () -> Unit) {
+    val haptics = rememberHaptics()
+    androidx.compose.material3.ListItem(
+        headlineContent = { Text(if (watched) "Watched" else "Mark as watched") },
+        supportingContent = { Text(if (watched) "Tap to mark as not watched" else "Shown with a check on posters and in your Repertoire") },
+        leadingContent = {
+            androidx.compose.material3.Icon(
+                if (watched) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
+                contentDescription = null,
+                tint = if (watched) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
+        colors = androidx.compose.material3.ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
+        modifier = Modifier.clickable(role = androidx.compose.ui.semantics.Role.Switch) { haptics.confirm(); onToggle() },
+    )
 }

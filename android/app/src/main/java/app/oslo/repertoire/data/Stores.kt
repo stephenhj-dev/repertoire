@@ -129,6 +129,16 @@ class UiPrefs(context: Context) {
         get() = preferences.getBoolean("dynamicColor", false)
         set(value) { preferences.edit().putBoolean("dynamicColor", value).apply() }
 
+    /** True once the user follows someone: the app then opens on the Repertoire tab. */
+    var startOnRepertoire: Boolean
+        get() = preferences.getBoolean("startOnRepertoire", false)
+        set(value) { preferences.edit().putBoolean("startOnRepertoire", value).apply() }
+
+    /** People whose completed milestone was already shown. */
+    var celebrated: Set<String>
+        get() = preferences.getStringSet("celebrated", emptySet()).orEmpty()
+        set(value) { preferences.edit().putStringSet("celebrated", value).apply() }
+
     /** True once setup was finished or skipped. */
     var setupDone: Boolean
         get() = preferences.getBoolean("setupDone", false)

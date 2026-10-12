@@ -1,6 +1,8 @@
 package app.oslo.repertoire.ui.guide
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import app.oslo.repertoire.ui.components.WatchedBadge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -72,6 +74,7 @@ fun BucketListItem(row: GuideRow.Bucket, onClick: () -> Unit, modifier: Modifier
  * shows open their detail page instead and keep a quick play button (preferred version; long
  * press to choose). They show TMDB's title, year and poster when matched, plus version badges.
  */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun TitleListItem(
     row: GuideRow.Title,
@@ -82,7 +85,11 @@ fun TitleListItem(
     onDetails: (() -> Unit)?,
     modifier: Modifier = Modifier,
     onChooseVersion: (() -> Unit)? = null,
+    watched: Boolean = false,
+    /** Long-press on the row: toggles watched (movies and series). */
+    onToggleWatched: (() -> Unit)? = null,
 ) {
+    val rowHaptics = app.oslo.repertoire.ui.components.rememberHaptics()
     val live = row.kind == "live"
     val name = if (live) splitDisplayName(row.name, row.kind) else DisplayName(null, row.display)
     val overline = listOfNotNull(
@@ -96,8 +103,19 @@ fun TitleListItem(
             .then(
                 if (onDetails != null) {
                     Modifier
-                        .clickable(onClickLabel = "Details", role = Role.Button, onClick = onDetails)
-                        .semantics { customActions = listOf(CustomAccessibilityAction("Play on TV") { onPlay(); true }) }
+                        .combinedClickable(
+                            onClickLabel = "Details",
+                            role = Role.Button,
+                            onLongClickLabel = if (watched) "Mark unwatched" else "Mark watched",
+                            onLongClick = onToggleWatched?.let { toggle -> { rowHaptics.hold(); toggle() } },
+                            onClick = onDetails,
+                        )
+                        .semantics {
+                            customActions = listOfNotNull(
+                                CustomAccessibilityAction("Play on TV") { onPlay(); true },
+                                onToggleWatched?.let { CustomAccessibilityAction(if (watched) "Mark unwatched" else "Mark watched") { it(); true } },
+                            )
+                        }
                 } else {
                     Modifier.clickable(onClickLabel = "Play on TV", role = Role.Button, onClick = onPlay)
                 },
@@ -127,13 +145,18 @@ fun TitleListItem(
             }
         }) else null,
         leadingContent = {
-            ChannelLogo(
-                url = row.icon,
-                title = name.title,
-                width = 48.dp,
-                height = if (poster) 64.dp else 48.dp,
-                modifier = Modifier.sharedElement("art-${row.kind}-${row.id}"),
-            )
+            androidx.compose.foundation.layout.Box {
+                ChannelLogo(
+                    url = row.icon,
+                    title = name.title,
+                    width = 48.dp,
+                    height = if (poster) 64.dp else 48.dp,
+                    modifier = Modifier.sharedElement("art-${row.kind}-${row.id}"),
+                )
+                if (poster) {
+                    WatchedBadge(watched, dim = true, size = 16.dp)
+                }
+            }
         },
         trailingContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {

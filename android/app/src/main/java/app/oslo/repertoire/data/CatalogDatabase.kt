@@ -120,6 +120,19 @@ interface CatalogDao {
     )
     suspend fun libraryRows(): List<LibraryRow>
 
+    /** TMDB id of a catalog entry (the portal's, else our lookup's); null when unknown. */
+    @Query(
+        """
+        SELECT COALESCE(t.tmdbId, r.tmdbId) FROM titles t LEFT JOIN tmdb_resolved r ON r.kind = t.kind AND r.name = t.name
+        WHERE t.kind = :kind AND t.name = :name LIMIT 1
+        """,
+    )
+    suspend fun tmdbIdOf(kind: String, name: String): Int?
+
+    /** Kind of a catalog entry by its raw name ("movie", "show", "live"). */
+    @Query("SELECT kind FROM titles WHERE name = :name AND kind IN ('movie', 'show') LIMIT 1")
+    suspend fun kindOf(name: String): String?
+
     @Query("SELECT * FROM tmdb_resolved WHERE kind = :kind AND name IN (:names)")
     suspend fun resolved(kind: String, names: List<String>): List<ResolvedTitle>
 
@@ -363,14 +376,15 @@ interface CatalogDao {
 }
 
 @Database(
-    entities = [TitleRow::class, GroupRow::class, ResolvedTitle::class, WatchlistRow::class, WatchlistItemRow::class, SeriesProgressRow::class],
-    version = 7,
+    entities = [TitleRow::class, GroupRow::class, ResolvedTitle::class, WatchlistRow::class, WatchlistItemRow::class, SeriesProgressRow::class, WatchedRow::class, FollowedPersonRow::class],
+    version = 8,
     exportSchema = false,
 )
 abstract class CatalogDatabase : RoomDatabase() {
     abstract fun catalog(): CatalogDao
     abstract fun watchlists(): WatchlistDao
     abstract fun seriesProgress(): SeriesProgressDao
+    abstract fun repertoire(): RepertoireDao
 
     companion object {
         private val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -428,6 +442,13 @@ abstract class CatalogDatabase : RoomDatabase() {
             }
         }
 
+        /** v8: watched titles (shared by every screen) and the people in the user's Repertoire. */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                RepertoireSchema.statements.forEach(db::execSQL)
+            }
+        }
+
         @Volatile private var instance: CatalogDatabase? = null
 
         fun get(context: Context): CatalogDatabase =
@@ -436,7 +457,7 @@ abstract class CatalogDatabase : RoomDatabase() {
                     context.applicationContext,
                     CatalogDatabase::class.java,
                     "guide.db",
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                     // Every upgrade has a migration: watchlists are user data, unlike the catalog,
                     // so the database is only rebuilt when an older build is installed over a newer one.
                     .fallbackToDestructiveMigrationOnDowngrade()

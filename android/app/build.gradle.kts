@@ -104,5 +104,7 @@ dependencies {
     implementation("dev.mobile:dadb:2.0.0")
 
     testImplementation("junit:junit:4.13.2")
+    // Runs the Room migration SQL on a real SQLite in JVM tests.
+    testImplementation("org.xerial:sqlite-jdbc:3.46.1.3")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

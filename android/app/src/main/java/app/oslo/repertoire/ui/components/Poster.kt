@@ -41,6 +41,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -219,5 +223,45 @@ fun PosterCard(
                 modifier = Modifier.padding(horizontal = 2.dp),
             )
         }
+    }
+}
+
+/**
+ * Letterboxd-style "seen" mark: a small amber disc with a check (top end of a poster). Pass
+ * [dim] to also veil the art so watched titles read as done at a glance.
+ */
+@Composable
+fun BoxScope.WatchedBadge(
+    watched: Boolean,
+    dim: Boolean = true,
+    size: androidx.compose.ui.unit.Dp = 22.dp,
+    alignment: Alignment = Alignment.TopEnd,
+) {
+    val shown by animateFloatAsState(if (watched) 1f else 0f, Motion.snappy(), label = "watched")
+    if (shown <= 0.01f) return
+    if (dim) {
+        Box(Modifier.matchParentSize().graphicsLayer { alpha = shown }.background(Color.Black.copy(alpha = 0.28f), Radii.Poster))
+    }
+    Box(
+        Modifier
+            .align(alignment)
+            .padding(if (size < 20.dp) 3.dp else 6.dp)
+            .size(size)
+            .graphicsLayer {
+                scaleX = 0.6f + 0.4f * shown
+                scaleY = 0.6f + 0.4f * shown
+                alpha = shown
+            }
+            .shadow(4.dp, androidx.compose.foundation.shape.CircleShape)
+            .background(Brand.Amber, androidx.compose.foundation.shape.CircleShape)
+            .semantics { contentDescription = "Watched" },
+        contentAlignment = Alignment.Center,
+    ) {
+        androidx.compose.material3.Icon(
+            androidx.compose.material.icons.Icons.Rounded.Check,
+            contentDescription = null,
+            tint = Brand.Ink,
+            modifier = Modifier.size(size * 0.68f),
+        )
     }
 }

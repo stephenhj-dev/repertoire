@@ -27,7 +27,7 @@ class Watchlists(context: Context) {
         val now = System.currentTimeMillis()
         val row = WatchlistRow(name = name.trim().ifBlank { "New list" }, position = dao.nextListPosition(), createdAt = now, personId = personId)
         val items = titles.distinctBy { key(it) }.map { it.toRow(listId = 0, position = 0, now = now) }
-        return dao.createWithItems(row, items)
+        return dao.createWithItems(row, items).also { db.repertoire().syncList(it) }
     }
 
     /** Adds [title] at the end of the list unless it's already there. */
@@ -35,8 +35,13 @@ class Watchlists(context: Context) {
         val existing = dao.itemsNow(listId)
         if (existing.any { key(it) == key(title) }) return false
         dao.insertItems(listOf(title.toRow(listId, dao.nextItemPosition(listId), System.currentTimeMillis())))
+        db.repertoire().syncList(listId)
         return true
     }
+
+    /** Watched is one state for the whole app: a list item ticks off the title everywhere. */
+    suspend fun setWatched(row: WatchlistItemRow, watched: Boolean) =
+        db.repertoire().setWatched(row.kind, row.tmdbId, row.catalogName.takeIf { row.tmdbId <= 0 }, watched, auto = false, now = System.currentTimeMillis())
 
     suspend fun remove(listId: Long, title: TitleRef) = dao.removeTitle(listId, title.kind, title.tmdbId, title.catalogName)
 

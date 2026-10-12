@@ -55,6 +55,8 @@ internal fun LazyListScope.guideRows(
                     onDetails = if (row.kind != "live") ({ onDetails(row) }) else null,
                     modifier = Modifier.animateItem(),
                     onChooseVersion = if (row.kind != "live") ({ choosing = true }) else null,
+                    watched = model.isWatched(row),
+                    onToggleWatched = if (row.kind != "live") ({ model.toggleWatched(row) }) else null,
                 )
                 if (choosing) {
                     VersionChooserSheet(
@@ -64,6 +66,8 @@ internal fun LazyListScope.guideRows(
                         enabled = model.tune == null,
                         onPlay = { model.play(it.name) },
                         onDismiss = { choosing = false },
+                        watched = model.isWatched(row),
+                        onToggleWatched = { model.toggleWatched(row) },
                     )
                 }
             }

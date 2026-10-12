@@ -129,7 +129,7 @@ class WatchlistViewModel(app: Application, handle: SavedStateHandle) : AndroidVi
     fun queueItems(): List<QueueItem> = items.map { QueueItem(it.row.title, it.versions, it.row.watched, it.row.id) }
 
     fun setWatched(item: ShownItem, watched: Boolean) {
-        viewModelScope.launch { repo.dao.setWatched(item.row.id, watched) }
+        viewModelScope.launch { repo.setWatched(item.row, watched) }
     }
 
     fun remove(item: ShownItem) {
@@ -144,7 +144,7 @@ class WatchlistViewModel(app: Application, handle: SavedStateHandle) : AndroidVi
     }
 
     fun markAllUnwatched() {
-        viewModelScope.launch { items.filter { it.row.watched }.forEach { repo.dao.setWatched(it.row.id, false) } }
+        viewModelScope.launch { items.filter { it.row.watched }.forEach { repo.setWatched(it.row, false) } }
     }
 
     fun rename(name: String) {

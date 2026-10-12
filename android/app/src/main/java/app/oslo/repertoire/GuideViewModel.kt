@@ -1,5 +1,8 @@
 package app.oslo.repertoire
 
+import app.oslo.repertoire.data.WatchKey
+import app.oslo.repertoire.repertoire.Repertoire
+
 import app.oslo.repertoire.data.SeriesProgressRow
 import app.oslo.repertoire.tune.TiviMateScreens
 
@@ -213,6 +216,51 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
 
     private val resolver = TitleResolver(app, viewModelScope)
     val watchlists = Watchlists(app)
+    val repertoire = Repertoire(app)
+
+    /** Keys ([WatchKey]) of every watched title, for indicators everywhere. */
+    var watchedKeys by mutableStateOf<Set<String>>(emptySet())
+        private set
+    var followedIds by mutableStateOf<Set<Int>>(emptySet())
+        private set
+
+    /** The tab the app opens on, read once at launch. */
+    val startOnRepertoire: Boolean = uiPrefs.startOnRepertoire
+
+    fun isWatched(kind: String, tmdbId: Int?, catalogName: String? = null): Boolean =
+        WatchKey.of(kind, tmdbId ?: 0, catalogName) in watchedKeys
+
+    fun isWatched(row: GuideRow.Title): Boolean =
+        row.kind != "live" && isWatched(row.kind, row.tmdbId, row.name.takeIf { (row.tmdbId ?: 0) <= 0 })
+
+    fun setWatched(kind: String, tmdbId: Int?, watched: Boolean, catalogName: String? = null, title: String? = null) {
+        val id = tmdbId ?: 0
+        viewModelScope.launch {
+            repertoire.setWatched(kind, id, watched, catalogName.takeIf { id <= 0 })
+        }
+        title?.let { notify(if (watched) "Marked $it watched" else "Marked $it unwatched") }
+    }
+
+    fun toggleWatched(row: GuideRow.Title) {
+        if (row.kind == "live") return
+        setWatched(row.kind, row.tmdbId, !isWatched(row), row.name, row.display)
+    }
+
+    fun isFollowed(personId: Int): Boolean = personId in followedIds
+
+    fun follow(personId: Int, name: String, profilePath: String?, department: String?) {
+        viewModelScope.launch {
+            repertoire.follow(personId, name, profilePath, department)
+            notify("Added $name to your Repertoire")
+        }
+    }
+
+    fun unfollow(personId: Int, name: String) {
+        viewModelScope.launch {
+            repertoire.unfollow(personId)
+            notify("Removed $name from your Repertoire")
+        }
+    }
 
     /** The Up next queue, if one is playing. */
     var queue by mutableStateOf<PlayQueue?>(null)
@@ -338,6 +386,13 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
         remote.onSessionLost = { scheduleReconnect() }
         if (paired && tvStore.keepConnected) connect()
         resolver.start()
+        viewModelScope.launch { repertoire.watched.collect { watchedKeys = it } }
+        viewModelScope.launch {
+            repertoire.followedIds.collect {
+                followedIds = it
+                uiPrefs.startOnRepertoire = it.isNotEmpty()
+            }
+        }
         viewModelScope.launch {
             @OptIn(FlowPreview::class)
             resolver.updates.debounce(1_200).collectLatest { regroup() }
@@ -437,7 +492,9 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
         val items = now.items.toMutableList()
         if (now.listId != null && current.itemId != null) {
             items[now.index] = current.copy(watched = true)
-            viewModelScope.launch { watchlists.dao.setWatched(current.itemId, true) }
+            viewModelScope.launch {
+                watchlists.dao.itemsNow(now.listId).firstOrNull { it.id == current.itemId }?.let { watchlists.setWatched(it, true) }
+            }
         }
         val next = PlayOrder.next(items, now.index)
         if (next == null) {
@@ -988,6 +1045,8 @@ class GuideViewModel(app: Application) : AndroidViewModel(app) {
                     }
                     status = result
                     if (result.startsWith("Playing")) {
+                        // Played through the app: the film counts as watched everywhere.
+                        withContext(Dispatchers.IO) { runCatching { repertoire.markPlayed(name) } }
                         notify("Now playing on $deviceName")
                     } else {
                         notify(result, retry = name)

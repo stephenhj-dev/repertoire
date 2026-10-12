@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import app.oslo.repertoire.GuideRow
 import app.oslo.repertoire.GuideViewModel
+import app.oslo.repertoire.ui.components.WatchedBadge
 import app.oslo.repertoire.ui.components.PosterCard
 import app.oslo.repertoire.ui.components.SectionHeader
 import app.oslo.repertoire.ui.components.VersionChooserSheet
@@ -104,6 +105,7 @@ private fun PosterCell(row: GuideRow.Title, model: GuideViewModel, onDetails: (G
                     .padding(3.dp),
             )
         }
+        WatchedBadge(model.isWatched(row), alignment = Alignment.TopStart)
         if (tuning) {
             Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.5f)), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.5.dp)
@@ -118,6 +120,8 @@ private fun PosterCell(row: GuideRow.Title, model: GuideViewModel, onDetails: (G
             enabled = model.tune == null,
             onPlay = { model.play(it.name) },
             onDismiss = { choosing = false },
+            watched = model.isWatched(row),
+            onToggleWatched = { model.toggleWatched(row) },
         )
     }
 }
