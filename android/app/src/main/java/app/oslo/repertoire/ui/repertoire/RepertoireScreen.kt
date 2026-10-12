@@ -201,7 +201,7 @@ private fun PersonHeroCard(
     Column(
         modifier
             .fillMaxWidth()
-            .padding(horizontal = Space.l, vertical = Space.s)
+            .padding(horizontal = Space.l, vertical = 6.dp)
             .graphicsLayer {
                 val s = 1f - 0.015f * press
                 scaleX = s
@@ -228,7 +228,7 @@ private fun PersonHeroCard(
                 }
             },
     ) {
-        Box(Modifier.fillMaxWidth().aspectRatio(16f / 10f)) {
+        Box(Modifier.fillMaxWidth().aspectRatio(16f / 7f)) {
             val backdrop = TmdbImages.backdrop(row.backdropPath)
             if (backdrop != null) {
                 AsyncImage(
@@ -255,39 +255,48 @@ private fun PersonHeroCard(
                     ),
                 ),
             )
-            Row(Modifier.align(Alignment.TopStart).padding(Space.m), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.align(Alignment.TopStart).padding(Space.s), verticalAlignment = Alignment.CenterVertically) {
                 Surface(shape = CircleShape, color = Color.Black.copy(alpha = 0.42f), contentColor = Color.White) {
-                    Text(roleOf(row.department), style = OverlineStyle, modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp))
+                    Text(roleOf(row.department), style = OverlineStyle, modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp))
+                }
+                val pop by animateFloatAsState(if (progress?.completed == true) 1f else 0f, Motion.bouncy(), label = "completed")
+                if (pop > 0.01f) {
+                    Spacer(Modifier.width(Space.xs))
+                    Box(
+                        Modifier.graphicsLayer {
+                            alpha = pop.coerceIn(0f, 1f)
+                            scaleX = 0.4f + 0.6f * pop
+                            scaleY = 0.4f + 0.6f * pop
+                        },
+                    ) { CompletedBadge() }
                 }
             }
-            val pop by animateFloatAsState(if (progress?.completed == true) 1f else 0f, Motion.bouncy(), label = "completed")
-            if (pop > 0.01f) {
-                Box(
-                    Modifier.align(Alignment.TopEnd).padding(Space.m).graphicsLayer {
-                        alpha = pop.coerceIn(0f, 1f)
-                        scaleX = 0.4f + 0.6f * pop
-                        scaleY = 0.4f + 0.6f * pop
-                    },
-                ) { CompletedBadge() }
+            card.work?.let { work ->
+                PosterFan(
+                    app.oslo.repertoire.repertoire.BodyOfWork.collage(work.items),
+                    model.watchedKeys,
+                    Modifier.align(Alignment.TopEnd).padding(top = Space.s, end = Space.m),
+                )
             }
             Row(
-                Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = Space.l, end = Space.l, bottom = Space.xs),
+                Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = Space.m, end = Space.m, bottom = Space.xxs),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                RingedPortrait(TmdbImages.profile(row.profilePath), progress?.fraction, size = 84.dp)
-                Spacer(Modifier.width(Space.l))
+                RingedPortrait(TmdbImages.profile(row.profilePath), progress?.fraction, size = 58.dp)
+                Spacer(Modifier.width(Space.m))
                 Column(Modifier.weight(1f)) {
                     Text(
                         row.name,
-                        style = MaterialTheme.typography.headlineMedium.copy(fontFamily = DisplayFamily),
-                        maxLines = 2,
+                        style = MaterialTheme.typography.titleLarge.copy(fontFamily = DisplayFamily),
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    Spacer(Modifier.height(2.dp))
                     when {
                         progress != null -> Text(
                             progress.label + if (progress.available < progress.total) " · ${progress.available} in your catalog" else "",
-                            style = MaterialTheme.typography.labelLarge,
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         card.failed -> Text("Couldn't load their films", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.error)
@@ -296,13 +305,13 @@ private fun PersonHeroCard(
                 }
             }
         }
-        Column(Modifier.padding(start = Space.l, end = Space.l, top = Space.s, bottom = Space.l)) {
+        Column(Modifier.padding(start = Space.m, end = Space.m, top = Space.xs, bottom = Space.m)) {
             ProgressStrip(progress?.fraction ?: 0f, visible = progress != null && progress.total > 0)
-            Spacer(Modifier.height(Space.m))
+            Spacer(Modifier.height(Space.s))
             when {
                 card.failed -> TextButton(onClick = onRetry) { Text("Try again") }
-                progress == null -> Box(Modifier.fillMaxWidth().height(72.dp).clip(MaterialTheme.shapes.large).posterShimmer())
-                progress.next != null -> NextUp(model, progress.next)
+                progress == null -> Box(Modifier.fillMaxWidth().height(48.dp).clip(MaterialTheme.shapes.large).posterShimmer())
+                progress.next != null -> NextUp(model, progress.next, compact = true)
                 progress.completed -> Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.EmojiEvents, contentDescription = null, tint = Brand.Amber)
                     Spacer(Modifier.width(Space.s))
@@ -395,20 +404,44 @@ private fun CompletedBadge() {
 
 /** The earliest unwatched film that can be played, with one-tap play on the TV. */
 @Composable
-fun NextUp(model: GuideViewModel, item: WorkItem, modifier: Modifier = Modifier) {
+fun NextUp(model: GuideViewModel, item: WorkItem, modifier: Modifier = Modifier, compact: Boolean = false) {
     val credit = item.credit
     Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = modifier.fillMaxWidth()) {
-        Row(Modifier.padding(Space.s), verticalAlignment = Alignment.CenterVertically) {
-            PosterArt(TmdbImages.poster(credit.posterPath), credit.title, Modifier.width(44.dp).aspectRatio(2f / 3f), shape = RoundedCornerShape(6.dp))
-            Spacer(Modifier.width(Space.m))
-            Column(Modifier.weight(1f)) {
-                Text("NEXT UP", style = OverlineStyle, color = MaterialTheme.colorScheme.primary)
-                Text(credit.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(
-                    listOfNotNull(credit.year?.toString(), if (credit.mediaType == "tv") "Series" else null).joinToString(" · "),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+        Row(Modifier.padding(if (compact) Space.xs else Space.s), verticalAlignment = Alignment.CenterVertically) {
+            PosterArt(
+                TmdbImages.poster(credit.posterPath),
+                credit.title,
+                Modifier.width(if (compact) 28.dp else 44.dp).aspectRatio(2f / 3f),
+                shape = RoundedCornerShape(if (compact) 4.dp else 6.dp),
+            )
+            Spacer(Modifier.width(if (compact) Space.s else Space.m))
+            if (compact) {
+                // One line: NEXT UP  Title · year
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                    Text("NEXT UP", style = OverlineStyle, color = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(Space.s))
+                    Text(
+                        credit.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    credit.year?.let {
+                        Spacer(Modifier.width(Space.xs))
+                        Text("· $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                    }
+                }
+            } else {
+                Column(Modifier.weight(1f)) {
+                    Text("NEXT UP", style = OverlineStyle, color = MaterialTheme.colorScheme.primary)
+                    Text(credit.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        listOfNotNull(credit.year?.toString(), if (credit.mediaType == "tv") "Series" else null).joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             PlayButton(
                 tuning = model.isTuning(item.versions),
@@ -416,6 +449,46 @@ fun NextUp(model: GuideViewModel, item: WorkItem, modifier: Modifier = Modifier)
                 label = "Play ${credit.title} on TV",
                 onPlay = { model.playBest(item.versions) },
                 onLongPress = null,
+            )
+        }
+    }
+}
+
+/**
+ * Their best-known titles as a fanned, overlapping strip of small posters. Watched ones are in
+ * full colour; the rest are dimmed and desaturated, so the strip reads as progress too.
+ */
+@Composable
+private fun PosterFan(items: List<WorkItem>, watched: Set<String>, modifier: Modifier = Modifier) {
+    if (items.isEmpty()) return
+    val width = 46.dp
+    val step = 24.dp
+    val muted = remember {
+        androidx.compose.ui.graphics.ColorFilter.colorMatrix(androidx.compose.ui.graphics.ColorMatrix().apply { setToSaturation(0.2f) })
+    }
+    val context = LocalContext.current
+    Box(modifier.width(width + step * (items.size - 1)).height(width * 1.5f + 8.dp)) {
+        val mid = (items.size - 1) / 2f
+        items.forEachIndexed { i, item ->
+            val seen = item.key in watched
+            val tilt = (i - mid) * 4f
+            AsyncImage(
+                model = ImageRequest.Builder(context).data(TmdbImages.thumb(item.credit.posterPath)).build(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                colorFilter = if (seen) null else muted,
+                modifier = Modifier
+                    .padding(start = step * i, top = (kotlin.math.abs(i - mid) * 2.5f).dp)
+                    .width(width)
+                    .aspectRatio(2f / 3f)
+                    .graphicsLayer {
+                        rotationZ = tilt
+                        alpha = if (seen) 1f else 0.72f
+                        shadowElevation = 6.dp.toPx()
+                        shape = RoundedCornerShape(4.dp)
+                        clip = true
+                    }
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
             )
         }
     }

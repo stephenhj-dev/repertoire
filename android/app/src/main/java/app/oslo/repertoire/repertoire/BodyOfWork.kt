@@ -71,4 +71,10 @@ object BodyOfWork {
      */
     fun justCompleted(before: WorkProgress?, now: WorkProgress): Boolean = now.completed && before != null && !before.completed
 
+
+    /** The card collage: their [count] best-known titles with posters, shown oldest first. */
+    fun collage(items: List<WorkItem>, count: Int = 6): List<WorkItem> {
+        val picked = items.filter { !it.credit.posterPath.isNullOrBlank() }.sortedByDescending { it.credit.voteCount }.take(count).toSet()
+        return items.filter { it in picked }
+    }
 }

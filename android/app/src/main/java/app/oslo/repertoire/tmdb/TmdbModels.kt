@@ -179,6 +179,8 @@ data class TmdbPerson(
 object TmdbImages {
     private const val BASE = "https://image.tmdb.org/t/p/"
     fun poster(path: String?): String? = path?.takeIf { it.isNotBlank() }?.let { "${BASE}w342$it" }
+    /** Small poster for strips and collages. */
+    fun thumb(path: String?): String? = path?.takeIf { it.isNotBlank() }?.let { "${BASE}w154$it" }
     fun backdrop(path: String?): String? = path?.takeIf { it.isNotBlank() }?.let { "${BASE}w780$it" }
     fun profile(path: String?): String? = path?.takeIf { it.isNotBlank() }?.let { "${BASE}w185$it" }
     fun still(path: String?): String? = path?.takeIf { it.isNotBlank() }?.let { "${BASE}w300$it" }

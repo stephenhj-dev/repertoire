@@ -61,4 +61,12 @@ class BodyOfWorkTest {
         // Nothing available: never "completed".
         assertFalse(BodyOfWork.progress(listOf(item(2, "1972", false)), emptySet()).completed)
     }
+
+    @Test
+    fun collagePicksBestKnownAndKeepsOrder() {
+        fun w(id: Int, votes: Int, poster: String? = "/p$id.jpg") =
+            WorkItem(FilmCredit("movie", id, "T$id", null, "19${10 + id}-01-01", poster, emptyList(), null, 1.0, votes), emptyList())
+        val items = listOf(w(1, 5), w(2, 900), w(3, 50, poster = null), w(4, 700), w(5, 10), w(6, 800))
+        assertEquals(listOf(2, 4, 6), BodyOfWork.collage(items, 3).map { it.credit.id })
+    }
 }
