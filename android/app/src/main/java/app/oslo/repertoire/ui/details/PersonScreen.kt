@@ -120,7 +120,7 @@ fun PersonScreen(
     val person = state.person
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     val pageGlass = remember { dev.chrisbanes.haze.HazeState() }
-    val solid by remember { androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 560 } }
+    val solid by remember { androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 1100 } }
     val scrolled = { if (listState.firstVisibleItemIndex == 0) listState.firstVisibleItemScrollOffset.toFloat() else 2000f }
     val backdrop = remember(person) {
         person?.combinedCredits?.let { Filmography.heroBackdrop(it, person.knownForDepartment) }?.let(TmdbImages::backdrop)
@@ -458,7 +458,7 @@ private fun RepertoireActions(model: GuideViewModel, page: PersonViewModel, pers
                 ) {
                     Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("In your Repertoire", maxLines = 1)
+                    Text("In Repertoire", maxLines = 1)
                 }
             } else {
                 Button(

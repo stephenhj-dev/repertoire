@@ -102,7 +102,7 @@ fun PersonQuickSheet(model: GuideViewModel, person: PersonChoice, onOpen: () -> 
                     FilledTonalButton(onClick = { haptics.tap(); model.unfollow(person.id, person.name) }, modifier = Modifier.weight(1f).height(48.dp)) {
                         Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("In your Repertoire", maxLines = 1)
+                        Text("In Repertoire", maxLines = 1)
                     }
                 } else {
                     Button(
