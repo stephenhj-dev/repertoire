@@ -11,6 +11,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import app.oslo.repertoire.navigation.PersonRoute
 import app.oslo.repertoire.Perf
+import app.oslo.repertoire.repertoire.PersonWork
+import app.oslo.repertoire.repertoire.Repertoire
 import app.oslo.repertoire.tmdb.CatalogLookup
 import app.oslo.repertoire.tmdb.catalogKind
 import app.oslo.repertoire.tmdb.CreditGroup
@@ -48,6 +50,11 @@ class PersonViewModel(app: Application, handle: SavedStateHandle) : AndroidViewM
     var group by mutableStateOf<CreditGroup?>(null)
     var newestFirst by mutableStateOf(false)
     var onlyLibrary by mutableStateOf(false)
+
+    /** Main body of work with availability (progress, Next up, saving as a list). */
+    var work by mutableStateOf<PersonWork?>(null)
+        private set
+    private val repertoire = Repertoire(app)
 
     init {
         load()
@@ -92,6 +99,7 @@ class PersonViewModel(app: Application, handle: SavedStateHandle) : AndroidViewM
                 val known = Filmography.knownFor(built).map(::withLibrary)
                 if (group == null || group !in groups) group = Filmography.primaryGroup(built(groups), person.knownForDepartment)
                 state = PersonState(loading = false, person = person, groups = groups, knownFor = known)
+                work = runCatching { repertoire.work(route.tmdbPersonId) }.getOrNull()
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {

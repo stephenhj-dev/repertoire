@@ -215,6 +215,8 @@ private fun countLine(list: WatchlistSummary): String {
     val titles = if (list.count == 1) "1 title" else "${list.count} titles"
     return when {
         list.count == 0 -> "Empty"
+        // Lists saved from a person read like a filmography in progress.
+        list.personId != null -> "${list.count - list.unwatched} of ${list.count} watched"
         list.unwatched == 0 -> "$titles · all watched"
         list.unwatched == list.count -> titles
         else -> "$titles · ${list.unwatched} to watch"

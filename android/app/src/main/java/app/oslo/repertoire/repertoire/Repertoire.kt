@@ -66,7 +66,7 @@ class Repertoire(context: Context) {
         }.toMap()
         val items = credits.map { credit -> WorkItem(credit, owned[credit.mediaType to credit.id].orEmpty().map { it.name }.distinct()) }
         val backdrop = person.combinedCredits?.let { Filmography.heroBackdrop(it, person.knownForDepartment) }
-        dao.refreshPerson(personId, backdrop, person.profilePath)
+        dao.refreshPerson(personId, backdrop, person.profilePath, person.knownForDepartment)
         return PersonWork(person, items).also { cache[personId] = it }
     }
 

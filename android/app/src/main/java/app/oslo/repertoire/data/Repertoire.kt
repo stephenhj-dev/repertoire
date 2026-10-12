@@ -91,8 +91,11 @@ interface RepertoireDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertPerson(row: FollowedPersonRow): Long
 
-    @Query("UPDATE followed_people SET backdropPath = :backdrop, profilePath = COALESCE(:profile, profilePath) WHERE personId = :id")
-    suspend fun refreshPerson(id: Int, backdrop: String?, profile: String?)
+    @Query(
+        "UPDATE followed_people SET backdropPath = COALESCE(:backdrop, backdropPath), profilePath = COALESCE(:profile, profilePath), " +
+            "department = COALESCE(:department, department) WHERE personId = :id",
+    )
+    suspend fun refreshPerson(id: Int, backdrop: String?, profile: String?, department: String?)
 
     @Query("DELETE FROM followed_people WHERE personId = :id")
     suspend fun unfollow(id: Int)

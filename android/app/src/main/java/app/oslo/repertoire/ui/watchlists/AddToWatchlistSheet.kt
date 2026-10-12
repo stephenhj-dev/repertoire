@@ -34,10 +34,18 @@ import app.oslo.repertoire.GuideViewModel
 import app.oslo.repertoire.watchlist.TitleRef
 import kotlinx.coroutines.launch
 
-/** Picks the lists [title] is on: tap to add or remove, or make a new list with it. */
+/**
+ * The title page's Add sheet: the lists [title] is on (tap to add or remove, or a new list),
+ * and, when given, its director/creators and lead actors to add to the Repertoire.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddToWatchlistSheet(model: GuideViewModel, title: TitleRef, onDismiss: () -> Unit) {
+fun AddToWatchlistSheet(
+    model: GuideViewModel,
+    title: TitleRef,
+    onDismiss: () -> Unit,
+    people: List<app.oslo.repertoire.ui.details.PersonChoice> = emptyList(),
+) {
     val dao = model.watchlists.dao
     val lists by remember { dao.summaries() }.collectAsState(initial = emptyList())
     val containing by remember(title) { dao.listsWith(title.kind, title.tmdbId, title.catalogName) }.collectAsState(initial = emptyList())
@@ -46,8 +54,9 @@ fun AddToWatchlistSheet(model: GuideViewModel, title: TitleRef, onDismiss: () ->
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding()) {
-            Text("Save “${title.title}” to", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
+            Text("Add “${title.title}”", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
             LazyColumn(contentPadding = PaddingValues(bottom = 16.dp)) {
+                item(key = "lists-header") { SheetOverline("To a list") }
                 item(key = "new") {
                     ListItem(
                         headlineContent = { Text("New list") },
@@ -77,6 +86,12 @@ fun AddToWatchlistSheet(model: GuideViewModel, title: TitleRef, onDismiss: () ->
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     )
                 }
+                if (people.isNotEmpty()) {
+                    item(key = "people-header") { SheetOverline("To your Repertoire") }
+                    items(people, key = { "person-${it.id}" }) { person ->
+                        app.oslo.repertoire.ui.details.PersonChoiceRow(model, person)
+                    }
+                }
             }
         }
     }
@@ -90,4 +105,14 @@ fun AddToWatchlistSheet(model: GuideViewModel, title: TitleRef, onDismiss: () ->
             }
         }, onDismiss = { naming = false })
     }
+}
+
+@Composable
+private fun SheetOverline(text: String) {
+    Text(
+        text.uppercase(),
+        style = app.oslo.repertoire.ui.theme.OverlineStyle,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 4.dp),
+    )
 }

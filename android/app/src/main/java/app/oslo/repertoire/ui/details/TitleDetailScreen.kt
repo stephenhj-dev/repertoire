@@ -31,6 +31,11 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.background
+import androidx.compose.material.icons.rounded.TheaterComedy
+import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -120,7 +125,11 @@ fun TitleDetailScreen(
         } else {
             TitleRef(route.kind, 0, title, parsed.year, null, catalogName = state.versions.firstOrNull() ?: route.name)
         }
-        AddToWatchlistSheet(model, ref, onDismiss = { saving = false })
+        AddToWatchlistSheet(model, ref, onDismiss = { saving = false }, people = detail?.let { peopleToFollow(it, route.kind) }.orEmpty())
+    }
+    var quick by remember { mutableStateOf<PersonChoice?>(null) }
+    quick?.let { person ->
+        PersonQuickSheet(model, person, onOpen = { onPerson(PersonLink(person.id, person.name)) }, onDismiss = { quick = null })
     }
 
     val listState = rememberLazyListState()
@@ -160,6 +169,16 @@ fun TitleDetailScreen(
                         }
                     },
                     onSave = if (!state.loading || detail != null) ({ saving = true }) else null,
+                    watched = if (detail != null) model.isWatched(route.kind, detail.id) else state.versions.firstOrNull()?.let { model.isWatched(route.kind, 0, it) },
+                    onWatched = {
+                        if (detail != null) {
+                            model.setWatched(route.kind, detail.id, !model.isWatched(route.kind, detail.id), title = detail.displayTitle)
+                        } else {
+                            state.versions.firstOrNull()?.let { name ->
+                                model.setWatched(route.kind, 0, !model.isWatched(route.kind, 0, name), catalogName = name, title = title)
+                            }
+                        }
+                    },
                 )
             }
             if (page.isSeries && state.inCatalog) {
@@ -189,7 +208,7 @@ fun TitleDetailScreen(
                 }
             }
             if (detail != null) {
-                detailSections(detail, route.kind, onPerson)
+                detailSections(detail, route.kind, model.followedIds) { quick = it }
                 item(key = "footnote") { TmdbFootnote() }
             }
         }
@@ -299,6 +318,8 @@ private fun Actions(
     onFavorite: () -> Unit,
     onTrailer: (String) -> Unit,
     onSave: (() -> Unit)?,
+    watched: Boolean? = null,
+    onWatched: () -> Unit = {},
 ) {
     // Parsing names is cheap (and cached), but only redo it when the names or preferences change.
     val prefs = model.playbackPrefs
@@ -353,7 +374,7 @@ private fun Actions(
                 )
             }
         }
-        if (trailerKey != null || favorite != null || onSave != null) {
+        if (trailerKey != null || favorite != null || onSave != null || watched != null) {
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (trailerKey != null) {
@@ -363,35 +384,40 @@ private fun Actions(
                         Text("Trailer")
                     }
                 }
-                if (favorite != null) {
-                    if (trailerKey == null) {
-                        OutlinedButton(onClick = onFavorite, modifier = Modifier.weight(1f).height(48.dp)) {
-                            Icon(if (favorite) Icons.Rounded.Star else Icons.Rounded.StarBorder, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text(if (favorite) "In favorites" else "Add to favorites")
-                        }
-                    } else {
-                        FilledTonalIconButton(onClick = onFavorite, modifier = Modifier.size(48.dp)) {
-                            Icon(
-                                if (favorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
-                                contentDescription = if (favorite) "Remove from favorites" else "Add to favorites",
-                            )
-                        }
-                    }
-                }
                 if (onSave != null) {
-                    if (trailerKey == null && favorite == null) {
-                        OutlinedButton(onClick = onSave, modifier = Modifier.weight(1f).height(48.dp)) {
-                            Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Save to a list")
-                        }
-                    } else {
-                        FilledTonalIconButton(onClick = onSave, modifier = Modifier.size(48.dp)) {
-                            Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, contentDescription = "Save to a watchlist")
-                        }
+                    // One Add: to a list, or the director and leads to the Repertoire.
+                    OutlinedButton(onClick = onSave, modifier = Modifier.weight(1f).height(48.dp)) {
+                        Icon(Icons.Rounded.Add, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Add")
                     }
                 }
+                if (watched != null) {
+                    val haptics = app.oslo.repertoire.ui.components.rememberHaptics()
+                    val tint by androidx.compose.animation.animateColorAsState(
+                        if (watched) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        label = "watched",
+                    )
+                    FilledTonalIconButton(onClick = { haptics.confirm(); onWatched() }, modifier = Modifier.size(48.dp)) {
+                        Icon(
+                            if (watched) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff,
+                            contentDescription = if (watched) "Watched. Mark unwatched" else "Mark watched",
+                            tint = tint,
+                        )
+                    }
+                }
+                if (favorite != null) {
+                    FilledTonalIconButton(onClick = onFavorite, modifier = Modifier.size(48.dp)) {
+                        Icon(
+                            if (favorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                            contentDescription = if (favorite) "Remove from favorites" else "Add to favorites",
+                        )
+                    }
+                }
+            }
+            if (watched == true) {
+                Spacer(Modifier.height(6.dp))
+                Text("Watched", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             }
         }
         if (best != null) {
@@ -505,7 +531,8 @@ private fun ProviderName(name: String) {
 private fun androidx.compose.foundation.lazy.LazyListScope.detailSections(
     detail: TmdbTitleDetail,
     kind: String,
-    onPerson: (PersonLink) -> Unit,
+    followedIds: Set<Int>,
+    onPerson: (PersonChoice) -> Unit,
 ) {
     val overview = detail.overview?.takeIf { it.isNotBlank() }
     if (overview != null || !detail.tagline.isNullOrBlank()) {
@@ -519,11 +546,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.detailSections(
             }
         }
     }
-    val makers: List<PersonLink> = if (kind == "show") {
-        detail.createdBy.map { PersonLink(it.id, it.name) }
-    } else {
-        detail.credits?.crew.orEmpty().filter { it.job == "Director" }.map { PersonLink(it.id, it.name) }
-    }.distinctBy { it.id }
+    val makers = makersOf(detail, kind)
     if (makers.isNotEmpty()) {
         item(key = "makers") {
             Column(Modifier.padding(top = 8.dp)) {
@@ -535,7 +558,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.detailSections(
                         else -> "Director"
                     },
                 )
-                FlowRowOfPeople(makers, onPerson)
+                FlowRowOfPeople(makers, followedIds, onPerson)
             }
         }
     }
@@ -550,11 +573,16 @@ private fun androidx.compose.foundation.lazy.LazyListScope.detailSections(
                             Modifier
                                 .width(96.dp)
                                 .clip(MaterialTheme.shapes.medium)
-                                .clickable(role = Role.Button, onClickLabel = "Open ${member.name}") { onPerson(PersonLink(member.id, member.name)) }
+                                .clickable(role = Role.Button, onClickLabel = "Open ${member.name}") {
+                                    onPerson(PersonChoice(member.id, member.name, member.character, member.profilePath, "Acting"))
+                                }
                                 .padding(vertical = 8.dp, horizontal = 4.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            ProfileImage(TmdbImages.profile(member.profilePath), size = 76.dp)
+                            Box {
+                                ProfileImage(TmdbImages.profile(member.profilePath), size = 76.dp)
+                                if (member.id in followedIds) FollowedDot(Modifier.align(Alignment.BottomEnd))
+                            }
                             Spacer(Modifier.height(8.dp))
                             Text(member.name, style = MaterialTheme.typography.labelLarge, maxLines = 2, textAlign = TextAlign.Center, overflow = TextOverflow.Ellipsis)
                             member.character?.takeIf { it.isNotBlank() }?.let {
@@ -577,7 +605,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.detailSections(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun FlowRowOfPeople(people: List<PersonLink>, onPerson: (PersonLink) -> Unit) {
+private fun FlowRowOfPeople(people: List<PersonChoice>, followedIds: Set<Int>, onPerson: (PersonChoice) -> Unit) {
     FlowRow(
         Modifier.padding(horizontal = 20.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -589,13 +617,42 @@ private fun FlowRowOfPeople(people: List<PersonLink>, onPerson: (PersonLink) -> 
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 onClick = { onPerson(person) },
             ) {
-                Text(
-                    person.name,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                )
+                Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(person.name, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                    if (person.id in followedIds) {
+                        Spacer(Modifier.width(6.dp))
+                        Icon(Icons.Rounded.TheaterComedy, contentDescription = "In your Repertoire", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
+                    }
+                }
             }
         }
+    }
+}
+
+/** Directors (or a series' creators). */
+private fun makersOf(detail: TmdbTitleDetail, kind: String): List<PersonChoice> = if (kind == "show") {
+    detail.createdBy.map { PersonChoice(it.id, it.name, "Creator", it.profilePath, null) }
+} else {
+    detail.credits?.crew.orEmpty().filter { it.job == "Director" }.map { PersonChoice(it.id, it.name, "Director", it.profilePath, "Directing") }
+}.distinctBy { it.id }
+
+/** Who the Add sheet offers for the Repertoire: the director(s) or creators, then the three leads. */
+fun peopleToFollow(detail: TmdbTitleDetail, kind: String): List<PersonChoice> {
+    val leads = detail.credits?.cast.orEmpty().sortedBy { it.order }.take(3)
+        .map { PersonChoice(it.id, it.name, it.character?.takeIf { c -> c.isNotBlank() }?.let { c -> "as $c" } ?: "Actor", it.profilePath, "Acting") }
+    return (makersOf(detail, kind) + leads).distinctBy { it.id }
+}
+
+/** Small amber mark on people already in the Repertoire. */
+@Composable
+private fun FollowedDot(modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .size(22.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.primary),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(Icons.Rounded.TheaterComedy, contentDescription = "In your Repertoire", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(13.dp))
     }
 }

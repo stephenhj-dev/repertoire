@@ -130,8 +130,12 @@ fun WatchlistScreen(
                         val missing = page.items.count { !it.inLibrary }
                         Text(
                             buildString {
-                                append(if (count == 1) "1 title" else "$count titles")
-                                append(" · ${page.unwatched} to watch")
+                                if (page.list?.personId != null) {
+                                    append("${count - page.unwatched} of $count watched")
+                                } else {
+                                    append(if (count == 1) "1 title" else "$count titles")
+                                    append(" · ${page.unwatched} to watch")
+                                }
                                 if (missing > 0) append(" · $missing not in your library")
                             },
                             style = MaterialTheme.typography.bodyMedium,

@@ -30,8 +30,14 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.RadioButtonUnchecked
+import androidx.compose.foundation.combinedClickable
+import app.oslo.repertoire.ui.components.WatchedBadge
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PersonSearch
+import androidx.compose.material.icons.rounded.TheaterComedy
+import androidx.compose.material.icons.rounded.EmojiEvents
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -157,6 +163,7 @@ private fun PersonContent(
     val owned = inGroup.count { it.inLibrary }
     LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = 32.dp)) {
         item(key = "header") { PersonHeader(person, backdrop, scrolled) }
+        item(key = "repertoire") { RepertoireActions(model, page, person, backdrop, onOpenList) }
         val bio = person.biography?.takeIf { it.isNotBlank() }
         if (bio != null) {
             item(key = "bio") { ExpandableText(bio, Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) }
@@ -173,8 +180,9 @@ private fun PersonContent(
                                 .clickable(role = Role.Button, onClickLabel = "Open ${entry.credit.title}") { onTitle(entry.detailRoute()) }
                                 .padding(4.dp),
                         ) {
-                            Box {
+                            Box(Modifier.graphicsLayer { alpha = if (entry.inLibrary) 1f else 0.55f }) {
                                 PosterImage(TmdbImages.poster(entry.credit.posterPath), entry.credit.title, width = 96.dp, height = 144.dp, corner = 12.dp)
+                                WatchedBadge(model.isWatched(catalogKind(entry.credit.mediaType), entry.credit.id), alignment = Alignment.TopStart)
                                 if (entry.inLibrary) {
                                     Icon(
                                         Icons.Rounded.Check,
@@ -237,31 +245,18 @@ private fun PlayAllRow(model: GuideViewModel, page: PersonViewModel, person: Tmd
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Button(
-            onClick = { model.startQueue(name, owned.map { QueueItem(it.credit.title, it.library.map { e -> e.name }) }) },
+            onClick = {
+                model.startQueue(
+                    name,
+                    owned.map { QueueItem(it.credit.title, it.library.map { e -> e.name }, watched = model.isWatched(catalogKind(it.credit.mediaType), it.credit.id)) },
+                )
+            },
             enabled = model.tune == null,
             modifier = Modifier.weight(1f),
         ) {
             Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
             Text("Play all ${owned.size}")
-        }
-        OutlinedButton(
-            onClick = {
-                scope.launch {
-                    val id = model.watchlists.create(
-                        name,
-                        owned.map { TitleRef(catalogKind(it.credit.mediaType), it.credit.id, it.credit.title, it.credit.year, it.credit.posterPath) },
-                        personId = person.id,
-                    )
-                    model.notify("Saved ${owned.size} titles to $name")
-                    onOpenList(id)
-                }
-            },
-            modifier = Modifier.weight(1f),
-        ) {
-            Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
-            Text("Save as list", maxLines = 1)
         }
     }
 }
@@ -360,14 +355,27 @@ private fun Controls(page: PersonViewModel, owned: Int, total: Int) {
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun CreditRow(model: GuideViewModel, entry: PersonCredit, onOpen: () -> Unit) {
     val credit = entry.credit
     val best = entry.library.firstOrNull()
+    val kind = catalogKind(credit.mediaType)
+    val watched = model.isWatched(kind, credit.id)
+    val haptics = app.oslo.repertoire.ui.components.rememberHaptics()
+    val toggle = { model.setWatched(kind, credit.id, !watched, title = credit.title) }
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable(role = Role.Button, onClickLabel = "Details", onClick = onOpen)
+            .combinedClickable(
+                role = Role.Button,
+                onClickLabel = "Details",
+                onLongClickLabel = if (watched) "Mark unwatched" else "Mark watched",
+                onLongClick = { haptics.hold(); toggle() },
+                onClick = onOpen,
+            )
+            // Not in the catalog: still listed, but quieter.
+            .graphicsLayer { alpha = if (entry.inLibrary) 1f else 0.5f }
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -379,7 +387,10 @@ private fun CreditRow(model: GuideViewModel, entry: PersonCredit, onOpen: () -> 
             modifier = Modifier.width(44.dp),
         )
         Spacer(Modifier.width(8.dp))
-        PosterImage(TmdbImages.poster(credit.posterPath), credit.title, width = 52.dp, height = 78.dp)
+        Box {
+            PosterImage(TmdbImages.poster(credit.posterPath), credit.title, width = 52.dp, height = 78.dp)
+            WatchedBadge(watched, size = 16.dp)
+        }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(credit.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -397,8 +408,14 @@ private fun CreditRow(model: GuideViewModel, entry: PersonCredit, onOpen: () -> 
                 LibraryBadge(label = if (badges.isEmpty()) "In your library" else "In your library · $badges")
             }
         }
+        IconButton(onClick = { haptics.tap(); toggle() }) {
+            Icon(
+                if (watched) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
+                contentDescription = if (watched) "Watched. Mark unwatched" else "Mark watched",
+                tint = if (watched) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         if (best != null) {
-            Spacer(Modifier.width(8.dp))
             val names = entry.library.map { it.name }
             var choosing by remember { mutableStateOf(false) }
             PlayButton(
@@ -417,6 +434,97 @@ private fun CreditRow(model: GuideViewModel, entry: PersonCredit, onOpen: () -> 
                     onPlay = { model.play(it.name) },
                     onDismiss = { choosing = false },
                 )
+            }
+        }
+    }
+}
+
+/**
+ * "Add to Repertoire" and "Save filmography as list", then, for people in the Repertoire, their
+ * progress and the next film to play.
+ */
+@Composable
+private fun RepertoireActions(model: GuideViewModel, page: PersonViewModel, person: TmdbPerson, backdrop: String?, onOpenList: (Long) -> Unit) {
+    val scope = rememberCoroutineScope()
+    val followed = model.isFollowed(person.id)
+    val work = page.work
+    val haptics = app.oslo.repertoire.ui.components.rememberHaptics()
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (followed) {
+                androidx.compose.material3.FilledTonalButton(
+                    onClick = { haptics.tap(); model.unfollow(person.id, person.name) },
+                    modifier = Modifier.weight(1f).height(48.dp),
+                ) {
+                    Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("In your Repertoire", maxLines = 1)
+                }
+            } else {
+                Button(
+                    onClick = {
+                        haptics.confirm()
+                        model.follow(person.id, person.name, person.profilePath, person.knownForDepartment)
+                    },
+                    modifier = Modifier.weight(1f).height(48.dp),
+                ) {
+                    Icon(Icons.Rounded.TheaterComedy, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Add to Repertoire", maxLines = 1)
+                }
+            }
+            OutlinedButton(
+                enabled = work != null,
+                onClick = {
+                    val films = work?.items.orEmpty().filter { it.credit.mediaType == "movie" }
+                    if (films.isEmpty()) return@OutlinedButton
+                    scope.launch {
+                        val name = person.name
+                        val id = model.watchlists.create(
+                            name,
+                            films.map { TitleRef("movie", it.credit.id, it.credit.title, it.credit.year, it.credit.posterPath) },
+                            personId = person.id,
+                        )
+                        model.notify("Saved ${films.size} films to $name")
+                        onOpenList(id)
+                    }
+                },
+                modifier = Modifier.weight(1f).height(48.dp),
+            ) {
+                Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Save as list", maxLines = 1)
+            }
+        }
+        if (work != null) {
+            val progress = app.oslo.repertoire.repertoire.BodyOfWork.progress(work.items, model.watchedKeys)
+            if (followed || progress.watched > 0) {
+                Spacer(Modifier.height(14.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(progress.label, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                    if (progress.completed) {
+                        Icon(Icons.Rounded.EmojiEvents, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Completed", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                    } else {
+                        Text(
+                            "${progress.available} in your catalog",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                val shown by androidx.compose.animation.core.animateFloatAsState(progress.fraction, app.oslo.repertoire.ui.theme.Motion.gentle(), label = "progress")
+                androidx.compose.material3.LinearProgressIndicator(
+                    progress = { shown },
+                    modifier = Modifier.fillMaxWidth(),
+                    strokeCap = androidx.compose.ui.graphics.StrokeCap.Round,
+                )
+                progress.next?.let { next ->
+                    Spacer(Modifier.height(12.dp))
+                    app.oslo.repertoire.ui.repertoire.NextUp(model, next)
+                }
             }
         }
     }
