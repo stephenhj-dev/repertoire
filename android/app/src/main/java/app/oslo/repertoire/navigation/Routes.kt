@@ -5,11 +5,11 @@ import androidx.compose.material.icons.automirrored.outlined.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.outlined.LiveTv
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.TheaterComedy
 import androidx.compose.material.icons.outlined.SettingsRemote
 import androidx.compose.material.icons.rounded.LiveTv
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.TheaterComedy
 import androidx.compose.material.icons.rounded.SettingsRemote
 import androidx.compose.ui.graphics.vector.ImageVector
 import kotlinx.serialization.Serializable
@@ -22,6 +22,9 @@ import kotlinx.serialization.Serializable
 @Serializable data object GuideRoute
 @Serializable data object SearchRoute
 @Serializable data object SettingsRoute
+
+/** The people the user follows and their films. */
+@Serializable data object RepertoireRoute
 
 /** First-run flow: portal login -> find TV -> connect/pair -> done. */
 @Serializable data object SetupGraph
@@ -67,9 +70,10 @@ enum class TopLevel(
     val icon: ImageVector,
     val selectedIcon: ImageVector,
 ) {
-    Remote(RemoteRoute, "Remote", Icons.Outlined.SettingsRemote, Icons.Rounded.SettingsRemote),
+    // Settings moved to a gear on the tab pages so the bar keeps five destinations.
+    Repertoire(RepertoireRoute, "Repertoire", Icons.Outlined.TheaterComedy, Icons.Rounded.TheaterComedy),
     Guide(GuideRoute, "Guide", Icons.Outlined.LiveTv, Icons.Rounded.LiveTv),
     Search(SearchRoute, "Search", Icons.Outlined.Search, Icons.Rounded.Search),
     Lists(WatchlistsRoute, "Lists", Icons.AutoMirrored.Outlined.PlaylistPlay, Icons.AutoMirrored.Rounded.PlaylistPlay),
-    Settings(SettingsRoute, "Settings", Icons.Outlined.Settings, Icons.Rounded.Settings),
+    Remote(RemoteRoute, "Remote", Icons.Outlined.SettingsRemote, Icons.Rounded.SettingsRemote),
 }

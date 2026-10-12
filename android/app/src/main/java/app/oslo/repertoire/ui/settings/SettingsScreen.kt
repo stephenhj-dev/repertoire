@@ -11,6 +11,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Info
@@ -80,13 +83,22 @@ fun SettingsScreen(
     onOpenGuides: () -> Unit,
     onRunSetup: () -> Unit,
     bottomInset: PaddingValues,
+    onBack: (() -> Unit)? = null,
 ) {
     LaunchedEffect(model.hasPortal) { model.loadAccount() }
     val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
     val itemColors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface)
     Column(Modifier.fillMaxSize().nestedScroll(scroll.nestedScrollConnection)) {
-        LargeTopAppBar(title = { Text("Settings") }, scrollBehavior = scroll)
-        LazyColumn(contentPadding = PaddingValues(bottom = bottomInset.calculateBottomPadding() + 24.dp)) {
+        LargeTopAppBar(
+            title = { Text("Settings") },
+            navigationIcon = {
+                if (onBack != null) {
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") }
+                }
+            },
+            scrollBehavior = scroll,
+        )
+        LazyColumn(Modifier.navigationBarsPadding(), contentPadding = PaddingValues(bottom = bottomInset.calculateBottomPadding() + 24.dp)) {
             item { SectionHeader("IPTV portal") }
             item {
                 ListItem(

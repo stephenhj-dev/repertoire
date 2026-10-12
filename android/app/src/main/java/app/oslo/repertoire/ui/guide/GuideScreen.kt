@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloudDownload
@@ -87,6 +88,7 @@ fun GuideScreen(
     onOpenPortal: () -> Unit,
     onDetails: (GuideRow.Title) -> Unit,
     bottomInset: PaddingValues,
+    onOpenSettings: () -> Unit = {},
 ) {
     val view = model.view
     BackHandler(enabled = view.depth > 0) { model.back() }
@@ -136,6 +138,7 @@ fun GuideScreen(
                         }
                     }
                 }
+                IconButton(onClick = onOpenSettings) { Icon(Icons.Outlined.Settings, contentDescription = "Settings") }
             },
             scrollBehavior = scroll,
         )

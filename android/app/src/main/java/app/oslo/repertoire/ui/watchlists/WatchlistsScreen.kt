@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ContentPaste
@@ -63,6 +64,7 @@ fun WatchlistsScreen(
     model: GuideViewModel,
     onOpen: (Long) -> Unit,
     bottomInset: PaddingValues,
+    onOpenSettings: () -> Unit = {},
     page: WatchlistsViewModel = viewModel(),
 ) {
     val context = LocalContext.current
@@ -81,6 +83,7 @@ fun WatchlistsScreen(
                 title = { Text("Lists") },
                 actions = {
                     IconButton(onClick = { importing = true }) { Icon(Icons.Rounded.ContentPaste, contentDescription = "Import a shared list") }
+                    IconButton(onClick = onOpenSettings) { Icon(Icons.Outlined.Settings, contentDescription = "Settings") }
                 },
                 scrollBehavior = scroll,
             )

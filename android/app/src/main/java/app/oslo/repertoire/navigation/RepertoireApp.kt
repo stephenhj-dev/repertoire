@@ -78,6 +78,7 @@ import app.oslo.repertoire.ui.setup.SetupPortalScreen
 import app.oslo.repertoire.ui.setup.SetupTvScreen
 import app.oslo.repertoire.ui.setup.SetupWelcomeScreen
 import app.oslo.repertoire.ui.setup.TvGuideScreen
+import app.oslo.repertoire.ui.repertoire.RepertoireScreen
 import androidx.navigation.toRoute
 import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.animation.scaleOut
@@ -181,7 +182,7 @@ fun RepertoireApp(model: GuideViewModel) {
                                     if (tab == TopLevel.Guide) model.backToRoot()
                                 } else {
                                     nav.navigate(tab.route) {
-                                        popUpTo(GuideRoute) { saveState = true }
+                                        popUpTo(if (model.startOnRepertoire) RepertoireRoute else GuideRoute) { saveState = true }
                                         launchSingleTop = true
                                         restoreState = true
                                     }
@@ -260,9 +261,18 @@ private fun detailsOf(row: GuideRow.Title) = TitleDetailRoute(
 )
 
 private fun NavGraphBuilder.mainGraph(model: GuideViewModel, nav: NavHostController, tv: app.oslo.repertoire.remote.TvStatus, bottom: PaddingValues) {
-    navigation<MainGraph>(startDestination = GuideRoute) {
+    navigation<MainGraph>(startDestination = if (model.startOnRepertoire) RepertoireRoute else GuideRoute) {
+        screen<RepertoireRoute> {
+            RepertoireScreen(
+                model,
+                onPerson = { id, name -> nav.navigate(PersonRoute(id, name)) },
+                onFindPeople = { nav.navigate(SearchRoute) { launchSingleTop = true } },
+                onOpenSettings = { nav.navigate(SettingsRoute) { launchSingleTop = true } },
+                bottomInset = bottom,
+            )
+        }
         screen<RemoteRoute> {
-            RemoteScreen(model, tv, onOpenDevices = { nav.navigate(DevicesRoute) }, bottomInset = bottom)
+            RemoteScreen(model, tv, onOpenDevices = { nav.navigate(DevicesRoute) }, bottomInset = bottom, onOpenSettings = { nav.navigate(SettingsRoute) { launchSingleTop = true } })
         }
         screen<GuideRoute> {
             GuideScreen(
@@ -270,6 +280,7 @@ private fun NavGraphBuilder.mainGraph(model: GuideViewModel, nav: NavHostControl
                 onOpenPortal = { nav.navigate(PortalRoute) },
                 onDetails = { nav.navigate(detailsOf(it)) },
                 bottomInset = bottom,
+                onOpenSettings = { nav.navigate(SettingsRoute) { launchSingleTop = true } },
             )
         }
         screen<SearchRoute> {
@@ -281,23 +292,29 @@ private fun NavGraphBuilder.mainGraph(model: GuideViewModel, nav: NavHostControl
             )
         }
         screen<WatchlistsRoute> {
-            WatchlistsScreen(model, onOpen = { nav.navigate(WatchlistRoute(it)) }, bottomInset = bottom)
-        }
-        screen<SettingsRoute> {
-            SettingsScreen(
+            WatchlistsScreen(
                 model,
-                tv,
-                onOpenPortal = { nav.navigate(PortalRoute) },
-                onOpenDevices = { nav.navigate(DevicesRoute) },
-                onOpenGuides = { nav.navigate(TvGuideRoute()) },
-                onRunSetup = { nav.navigate(SetupGraph) },
+                onOpen = { nav.navigate(WatchlistRoute(it)) },
                 bottomInset = bottom,
+                onOpenSettings = { nav.navigate(SettingsRoute) { launchSingleTop = true } },
             )
         }
     }
 }
 
 private fun NavGraphBuilder.pushed(model: GuideViewModel, nav: NavHostController, tv: app.oslo.repertoire.remote.TvStatus) {
+    screen<SettingsRoute>(pushed = true) {
+        SettingsScreen(
+            model,
+            tv,
+            onOpenPortal = { nav.navigate(PortalRoute) },
+            onOpenDevices = { nav.navigate(DevicesRoute) },
+            onOpenGuides = { nav.navigate(TvGuideRoute()) },
+            onRunSetup = { nav.navigate(SetupGraph) },
+            bottomInset = PaddingValues(0.dp),
+            onBack = { nav.popBackStack() },
+        )
+    }
     screen<DevicesRoute>(pushed = true) {
         DevicesScreen(model, tv, onBack = { nav.popBackStack() }, onGuide = { nav.navigate(TvGuideRoute(it)) })
     }

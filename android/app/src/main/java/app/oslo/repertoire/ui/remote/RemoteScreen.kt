@@ -19,6 +19,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.VolumeOff
 import androidx.compose.material.icons.rounded.Add
@@ -102,6 +103,7 @@ fun RemoteScreen(
     tv: TvStatus,
     onOpenDevices: () -> Unit,
     bottomInset: PaddingValues,
+    onOpenSettings: () -> Unit = {},
 ) {
     var numpad by rememberSaveable { mutableStateOf(false) }
     val link = linkState(model, tv)
@@ -119,6 +121,7 @@ fun RemoteScreen(
                 IconButton(onClick = { numpad = true }) {
                     Icon(Icons.Rounded.Dialpad, contentDescription = "Number pad")
                 }
+                IconButton(onClick = onOpenSettings) { Icon(Icons.Outlined.Settings, contentDescription = "Settings") }
             },
         )
         Column(
