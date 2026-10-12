@@ -228,7 +228,7 @@ private fun PersonHeroCard(
                 }
             },
     ) {
-        Box(Modifier.fillMaxWidth().aspectRatio(16f / 7f)) {
+        Box(Modifier.fillMaxWidth().aspectRatio(2.9f)) {
             val backdrop = TmdbImages.backdrop(row.backdropPath)
             if (backdrop != null) {
                 AsyncImage(
@@ -461,8 +461,8 @@ fun NextUp(model: GuideViewModel, item: WorkItem, modifier: Modifier = Modifier,
 @Composable
 private fun PosterFan(items: List<WorkItem>, watched: Set<String>, modifier: Modifier = Modifier) {
     if (items.isEmpty()) return
-    val width = 46.dp
-    val step = 24.dp
+    val width = 38.dp
+    val step = 20.dp
     val muted = remember {
         androidx.compose.ui.graphics.ColorFilter.colorMatrix(androidx.compose.ui.graphics.ColorMatrix().apply { setToSaturation(0.2f) })
     }
