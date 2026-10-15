@@ -1,13 +1,19 @@
 .gradle/
 build/
-local.properties
+.kotlin/
 *.iml
 .idea/
 captures/
 *.apk
-*.jks
 .DS_Store
 
-# Local API keys
-tmdb.properties
+# Signing keys and device keys
+*.keystore
+*.jks
+adbkey*
+
+# Local config and API keys
+local.properties
 keystore.properties
+tmdb.properties
+!*.properties.example
